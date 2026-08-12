@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#ef4b00">
+  <title>Il Sommelier di Famila Sud Italia</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="wrap">
+    <section id="home" class="page-card">
+      <header class="brand">
+        <div class="famila">famila</div>
+        <div class="sud">SUD<br><span>ITALIA</span></div>
+      </header>
+
+      <section class="hero">
+        <div class="hero-copy">
+          <div class="glass-emoji">🍷</div>
+          <h1>Il Sommelier di<br><span>Famila Sud Italia</span></h1>
+          <h2>Scopri il vino giusto<br>per ogni occasione</h2>
+          <p>Inquadra l'etichetta della bottiglia oppure scrivi il nome del vino. Ti raccontiamo in pochi secondi le informazioni più importanti.</p>
+        </div>
+
+        <div class="wine-scene" aria-hidden="true">
+          <div class="bottle"><span></span></div>
+          <div class="wineglass"></div>
+        </div>
+      </section>
+
+      <section class="actions">
+        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
+        <button id="scanButton" class="scan-button" type="button">
+          <span class="camera">📷</span>
+          <span class="scan-copy">
+            <strong>SCANSIONA L'ETICHETTA</strong>
+            <small>Inquadra con la fotocamera l'etichetta della bottiglia</small>
+          </span>
+        </button>
+
+        <div class="or"><i></i><b>oppure</b><i></i></div>
+
+        <form id="wineForm" class="search-box">
+          <div class="search-intro">
+            <span class="search-icon">⌕</span>
+            <div>
+              <strong>CERCA IL VINO PER NOME</strong>
+              <small>Scrivi il nome del vino che stai cercando</small>
+            </div>
+          </div>
+          <div class="search-row">
+            <input id="wineName" type="text" placeholder="Es. Primitivo di Manduria" autocomplete="off" required>
+            <button type="submit">Cerca</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="benefits">
+        <div><span>🍇</span><b>SCOPRI COM'È</b><small>Caratteristiche e gusto</small></div>
+        <div><span>🍽️</span><b>TROVA L'ABBINAMENTO</b><small>I migliori abbinamenti con i tuoi piatti</small></div>
+        <div><span>🌡️</span><b>SERVILO AL MEGLIO</b><small>La temperatura ideale di servizio</small></div>
+      </section>
+
+      <footer>
+        <span>♡</span>
+        <p>Un servizio</p>
+        <strong>Famila Sud Italia</strong>
+      </footer>
+    </section>
+
+    <section id="loading" class="state-card hidden">
+      <div class="spinner"></div>
+      <h2>Sto riconoscendo il vino…</h2>
+      <p>Un attimo, il Sommelier sta preparando le informazioni più importanti.</p>
+    </section>
+
+    <section id="result" class="state-card hidden">
+      <button id="backButton" class="back" type="button">← Nuova ricerca</button>
+      <div class="result-head">
+        <div class="result-icon">🍷</div>
+        <div>
+          <div class="eyebrow">IL SOMMELIER DI FAMILA SUD ITALIA</div>
+          <h1 id="resultName"></h1>
+          <p id="resultMeta"></p>
+        </div>
+      </div>
+
+      <div id="uncertain" class="warning hidden"></div>
+
+      <div class="info-grid">
+        <article>
+          <span>👃</span>
+          <h3>Com'è</h3>
+          <p id="resultTaste"></p>
+        </article>
+        <article>
+          <span>🍽️</span>
+          <h3>Con cosa abbinarlo</h3>
+          <p id="resultPairings"></p>
+        </article>
+        <article>
+          <span>🌡️</span>
+          <h3>Come servirlo</h3>
+          <p id="resultTemp"></p>
+        </article>
+        <article>
+          <span>⭐</span>
+          <h3>Ideale per</h3>
+          <p id="resultIdeal"></p>
+        </article>
+      </div>
+
+      <p class="note">Le informazioni sono indicative e possono variare in base ad annata e produttore. In caso di dubbio verifica sempre l'etichetta della bottiglia.</p>
+    </section>
+
+    <section id="error" class="state-card hidden error-card">
+      <div class="bang">!</div>
+      <h2>Non riesco a identificarlo con certezza</h2>
+      <p id="errorText">Prova a fotografare meglio l'etichetta oppure inserisci il nome del vino.</p>
+      <button id="retryButton" class="retry" type="button">Riprova</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

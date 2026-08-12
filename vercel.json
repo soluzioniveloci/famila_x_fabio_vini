@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/sommelier.js": {
+      "maxDuration": 30
+    }
+  }
+}
