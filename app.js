@@ -11,13 +11,15 @@ let scannerRunning = false;
 let alreadyRead = false;
 
 function hideAll() {
-  [home, scannerView, loading, result, errorBox].forEach(x => x.classList.add("hidden"));
+  [home, scannerView, loading, result, errorBox]
+    .filter(Boolean)
+    .forEach(x => x.classList.add("hidden"));
 }
 
 function show(el) {
   hideAll();
-  el.classList.remove("hidden");
-  window.scrollTo({top:0, behavior:"smooth"});
+  if (el) el.classList.remove("hidden");
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function value(v) {
@@ -37,166 +39,395 @@ async function askSommelier(payload) {
   show(loading);
 
   if (payload.mode === "ean") {
-    $("loadingTitle").textContent = "Sto cercando il codice " + payload.ean + "…";
-    $("loadingText").textContent = "Cerco online a quale vino appartiene e verifico le informazioni principali.";
-  } else if (payload.mode === "image") {
-    $("loadingTitle").textContent = "Sto riconoscendo il vino…";
-    $("loadingText").textContent = "Analizzo la foto e poi verifico le informazioni sul web.";
+    if ($("loadingTitle")) {
+      $("loadingTitle").textContent =
+        "Sto cercando il codice " + payload.ean + "…";
+    }
+
+    if ($("loadingText")) {
+      $("loadingText").textContent =
+        "Il Sommelier Virtuale sta verificando a quale vino appartiene.";
+    }
+  }
+
+  if (payload.mode === "image") {
+    if ($("loadingTitle")) {
+      $("loadingTitle").textContent = "Sto riconoscendo il vino…";
+    }
+
+    if ($("loadingText")) {
+      $("loadingText").textContent =
+        "Analizzo la foto e poi verifico le informazioni sul web.";
+    }
   }
 
   try {
     const response = await fetch("/api/sommelier", {
       method: "POST",
-      headers: {"Content-Type":"application/json"},
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify(payload)
     });
 
     const data = await response.json();
 
-    if (!response.ok) throw new Error(data.error || "Errore del servizio.");
+    if (!response.ok) {
+      throw new Error(
+        data.error || "Errore del servizio."
+      );
+    }
 
     const w = data.wine || {};
 
     if (!w.identified) {
-      $("errorTitle").textContent = "Non riesco a identificarlo con certezza";
-      $("errorText").textContent = w.message || "Prova con il nome del vino oppure controlla il codice a barre.";
+      if ($("errorTitle")) {
+        $("errorTitle").textContent =
+          "Non riesco a identificarlo con certezza";
+      }
+
+      if ($("errorText")) {
+        $("errorText").textContent =
+          w.message ||
+          "Prova con una foto più chiara oppure scansiona il codice a barre.";
+      }
+
       show(errorBox);
       return;
     }
 
-    $("resultName").textContent = value(w.name);
-    $("resultMeta").textContent = [w.producer, w.region, w.type, w.grape].filter(Boolean).join(" · ");
-    $("resultTaste").textContent = value(w.taste);
-    $("resultPairings").textContent = value(w.pairings);
-    $("resultTemp").textContent = value(w.temperature);
-    $("resultIdeal").textContent = value(w.ideal_for);
-
-    if (w.ean) {
-      $("resultCode").textContent = "Codice: " + w.ean;
-    } else {
-      $("resultCode").textContent = "";
+    if ($("resultName")) {
+      $("resultName").textContent = value(w.name);
     }
 
-    if (w.confidence_note) {
-      $("uncertain").textContent = w.confidence_note;
-      $("uncertain").classList.remove("hidden");
-    } else {
-      $("uncertain").classList.add("hidden");
+    if ($("resultMeta")) {
+      $("resultMeta").textContent =
+        [
+          w.producer,
+          w.region,
+          w.type,
+          w.grape
+        ]
+          .filter(Boolean)
+          .join(" · ");
+    }
+
+    if ($("resultTaste")) {
+      $("resultTaste").textContent =
+        value(w.taste);
+    }
+
+    if ($("resultPairings")) {
+      $("resultPairings").textContent =
+        value(w.pairings);
+    }
+
+    if ($("resultTemp")) {
+      $("resultTemp").textContent =
+        value(w.temperature);
+    }
+
+    if ($("resultIdeal")) {
+      $("resultIdeal").textContent =
+        value(w.ideal_for);
+    }
+
+    if ($("resultCode")) {
+      $("resultCode").textContent =
+        w.ean ? "Codice: " + w.ean : "";
+    }
+
+    const uncertain = $("uncertain");
+
+    if (uncertain) {
+      if (w.confidence_note) {
+        uncertain.textContent =
+          w.confidence_note;
+
+        uncertain.classList.remove("hidden");
+      } else {
+        uncertain.classList.add("hidden");
+      }
     }
 
     show(result);
+
   } catch (err) {
-    $("errorTitle").textContent = "Si è verificato un problema";
-    $("errorText").textContent = err.message || "Riprova tra qualche secondo.";
+    if ($("errorTitle")) {
+      $("errorTitle").textContent =
+        "Si è verificato un problema";
+    }
+
+    if ($("errorText")) {
+      $("errorText").textContent =
+        err.message ||
+        "Riprova tra qualche secondo.";
+    }
+
     show(errorBox);
   }
 }
 
 async function startScanner() {
   alreadyRead = false;
+
   show(scannerView);
 
   if (typeof Html5Qrcode === "undefined") {
-    $("errorTitle").textContent = "Scanner non disponibile";
-    $("errorText").textContent = "La libreria di scansione non è stata caricata. Controlla la connessione e riprova.";
+    if ($("errorTitle")) {
+      $("errorTitle").textContent =
+        "Scanner non disponibile";
+    }
+
+    if ($("errorText")) {
+      $("errorText").textContent =
+        "La libreria di scansione non è stata caricata. Controlla la connessione e riprova.";
+    }
+
     show(errorBox);
     return;
   }
 
-  html5QrCode = new Html5Qrcode("reader", {
-    formatsToSupport: [
-      Html5QrcodeSupportedFormats.EAN_13,
-      Html5QrcodeSupportedFormats.EAN_8,
-      Html5QrcodeSupportedFormats.UPC_A,
-      Html5QrcodeSupportedFormats.UPC_E,
-      Html5QrcodeSupportedFormats.CODE_128
-    ],
-    verbose: false
-  });
+  html5QrCode = new Html5Qrcode(
+    "reader",
+    {
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128
+      ],
+      verbose: false
+    }
+  );
 
-  const onSuccess = async (decodedText) => {
+  const onSuccess = async decodedText => {
     if (alreadyRead) return;
-    const code = normalizeCode(decodedText);
+
+    const code =
+      normalizeCode(decodedText);
+
     if (!validBarcode(code)) return;
 
     alreadyRead = true;
-    if (navigator.vibrate) navigator.vibrate(80);
-    await askSommelier({mode:"ean", ean:code});
+
+    if (navigator.vibrate) {
+      navigator.vibrate(80);
+    }
+
+    await askSommelier({
+      mode: "ean",
+      ean: code
+    });
   };
 
   try {
     await html5QrCode.start(
-      { facingMode: "environment" },
+      {
+        facingMode: "environment"
+      },
       {
         fps: 12,
-        qrbox: (viewfinderWidth, viewfinderHeight) => ({
-          width: Math.floor(viewfinderWidth * 0.88),
-          height: Math.floor(Math.min(150, viewfinderHeight * 0.30))
+
+        qrbox: (w, h) => ({
+          width:
+            Math.floor(w * 0.88),
+
+          height:
+            Math.floor(
+              Math.min(
+                150,
+                h * 0.30
+              )
+            )
         }),
+
         aspectRatio: 1.777778,
         disableFlip: false
       },
+
       onSuccess,
       () => {}
     );
+
     scannerRunning = true;
+
   } catch (err) {
     scannerRunning = false;
-    $("errorTitle").textContent = "Non riesco ad aprire la fotocamera";
-    $("errorText").textContent = "Consenti l'accesso alla fotocamera nel browser e riprova. Puoi anche inserire l'EAN manualmente.";
+
+    if ($("errorTitle")) {
+      $("errorTitle").textContent =
+        "Non riesco ad aprire la fotocamera";
+    }
+
+    if ($("errorText")) {
+      $("errorText").textContent =
+        "Consenti l'accesso alla fotocamera nel browser e riprova.";
+    }
+
     show(errorBox);
   }
 }
 
 async function stopScanner() {
-  if (html5QrCode && scannerRunning) {
-    try { await html5QrCode.stop(); } catch {}
+  if (
+    html5QrCode &&
+    scannerRunning
+  ) {
+    try {
+      await html5QrCode.stop();
+    } catch {}
+
     scannerRunning = false;
   }
+
   if (html5QrCode) {
-    try { html5QrCode.clear(); } catch {}
+    try {
+      html5QrCode.clear();
+    } catch {}
+
     html5QrCode = null;
   }
 }
 
-$("scanButton").addEventListener("click", startScanner);
+if ($("scanButton")) {
+  $("scanButton")
+    .addEventListener(
+      "click",
+      startScanner
+    );
+}
 
-$("closeScanner").addEventListener("click", async () => {
-  await stopScanner();
-  show(home);
-});
+if ($("closeScanner")) {
+  $("closeScanner")
+    .addEventListener(
+      "click",
+      async () => {
+        await stopScanner();
+        show(home);
+      }
+    );
+}
 
-$("photoButton").addEventListener("click", () => $("photoInput").click());
+if (
+  $("photoButton") &&
+  $("photoInput")
+) {
+  $("photoButton")
+    .addEventListener(
+      "click",
+      () => {
+        $("photoInput").click();
+      }
+    );
 
-$("photoInput").addEventListener("change", e => {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  if (file.size > 8 * 1024 * 1024) {
-    $("errorTitle").textContent = "Foto troppo grande";
-    $("errorText").textContent = "Usa una foto inferiore a 8 MB.";
-    show(errorBox);
-    return;
+  $("photoInput")
+    .addEventListener(
+      "change",
+      e => {
+        const file =
+          e.target.files &&
+          e.target.files[0];
+
+        if (!file) return;
+
+        if (
+          file.size >
+          8 * 1024 * 1024
+        ) {
+          if ($("errorTitle")) {
+            $("errorTitle").textContent =
+              "Foto troppo grande";
+          }
+
+          if ($("errorText")) {
+            $("errorText").textContent =
+              "Usa una foto inferiore a 8 MB.";
+          }
+
+          show(errorBox);
+          return;
+        }
+
+        const reader =
+          new FileReader();
+
+        reader.onload =
+          () =>
+            askSommelier({
+              mode: "image",
+              image: reader.result
+            });
+
+        reader.readAsDataURL(file);
+      }
+    );
+}
+
+if ($("eanForm")) {
+  $("eanForm")
+    .addEventListener(
+      "submit",
+      e => {
+        e.preventDefault();
+
+        const ean =
+          normalizeCode(
+            $("eanInput")?.value
+          );
+
+        if (!validBarcode(ean)) {
+          if ($("errorTitle")) {
+            $("errorTitle").textContent =
+              "Codice non valido";
+          }
+
+          if ($("errorText")) {
+            $("errorText").textContent =
+              "Inserisci un codice numerico da 8, 12, 13 o 14 cifre.";
+          }
+
+          show(errorBox);
+          return;
+        }
+
+        askSommelier({
+          mode: "ean",
+          ean
+        });
+      }
+    );
+}
+
+if ($("backButton")) {
+  $("backButton")
+    .addEventListener(
+      "click",
+      () => {
+        show(home);
+      }
+    );
+}
+
+if ($("retryButton")) {
+  $("retryButton")
+    .addEventListener(
+      "click",
+      () => {
+        show(home);
+      }
+    );
+}
+
+document.addEventListener(
+  "visibilitychange",
+  async () => {
+    if (
+      document.hidden &&
+      scannerRunning
+    ) {
+      await stopScanner();
+    }
   }
-  const reader = new FileReader();
-  reader.onload = () => askSommelier({mode:"image", image:reader.result});
-  reader.readAsDataURL(file);
-});
-
-$("eanForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const ean = normalizeCode($("eanInput").value);
-  if (!validBarcode(ean)) {
-    $("errorTitle").textContent = "Codice non valido";
-    $("errorText").textContent = "Inserisci un codice a barre numerico da 8, 12, 13 o 14 cifre.";
-    show(errorBox);
-    return;
-  }
-  askSommelier({mode:"ean", ean});
-});
-
-$("backButton").addEventListener("click", () => show(home));
-$("retryButton").addEventListener("click", () => show(home));
-
-document.addEventListener("visibilitychange", async () => {
-  if (document.hidden && scannerRunning) await stopScanner();
-});
+);
