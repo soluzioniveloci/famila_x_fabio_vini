@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#ef4b00">
-  <title>Il Sommelier di Famila Sud Italia</title>
+  <title>Il Sommelier Virtuale</title>
   <link rel="stylesheet" href="styles.css">
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
@@ -12,16 +12,15 @@
   <main class="wrap">
     <section id="home" class="page-card">
       <header class="brand">
-        <div class="famila">famila</div>
-        <div class="sud">SUD<br><span>ITALIA</span></div>
+        <img src="logo-top.png" alt="Famila Superstore" class="top-logo">
       </header>
 
       <section class="hero">
         <div class="hero-copy">
           <div class="glass-emoji">🍷</div>
-          <h1>Il Sommelier di<br><span>Famila Sud Italia</span></h1>
+          <h1>Il Sommelier<br><span>Virtuale</span></h1>
           <h2>Scopri il vino giusto<br>per ogni occasione</h2>
-          <p>Scansiona il codice a barre della bottiglia oppure scrivi il nome del vino. In pochi secondi trovi le informazioni più importanti.</p>
+          <p>Scansiona il codice a barre oppure fotografa la bottiglia. In pochi secondi ottieni le informazioni più importanti sul vino.</p>
         </div>
         <div class="wine-scene" aria-hidden="true">
           <div class="bottle"><span></span></div>
@@ -40,19 +39,14 @@
 
         <div class="or"><i></i><b>oppure</b><i></i></div>
 
-        <form id="wineForm" class="search-box">
-          <div class="search-intro">
-            <span class="search-icon">⌕</span>
-            <div>
-              <strong>CERCA IL VINO PER NOME</strong>
-              <small>Scrivi il nome del vino che stai cercando</small>
-            </div>
-          </div>
-          <div class="search-row">
-            <input id="wineName" type="text" placeholder="Es. Primitivo di Manduria" autocomplete="off" required>
-            <button type="submit">Cerca</button>
-          </div>
-        </form>
+        <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+        <button id="photoButton" class="photo-button" type="button">
+          <span class="photo-icon">📷</span>
+          <span class="photo-copy">
+            <strong>FOTOGRAFA IL VINO</strong>
+            <small>Scatta una foto chiara della bottiglia o dell'etichetta</small>
+          </span>
+        </button>
       </section>
 
       <section class="benefits">
@@ -62,9 +56,7 @@
       </section>
 
       <footer>
-        <span>♡</span>
-        <p>Un servizio</p>
-        <strong>Famila Sud Italia</strong>
+        <img src="logo-footer.png" alt="Famila Superstore" class="footer-logo">
       </footer>
     </section>
 
@@ -94,7 +86,7 @@
     <section id="loading" class="state-card hidden">
       <div class="spinner"></div>
       <h2 id="loadingTitle">Sto cercando il vino…</h2>
-      <p id="loadingText">Un attimo, il Sommelier sta verificando le informazioni più importanti.</p>
+      <p id="loadingText">Il Sommelier Virtuale sta analizzando e verificando le informazioni.</p>
     </section>
 
     <section id="result" class="state-card hidden">
@@ -102,14 +94,14 @@
       <div class="result-head">
         <div class="result-icon">🍷</div>
         <div>
-          <div class="eyebrow">IL SOMMELIER DI FAMILA SUD ITALIA</div>
+          <div class="eyebrow">IL SOMMELIER VIRTUALE</div>
           <h1 id="resultName"></h1>
           <p id="resultMeta"></p>
           <p id="resultCode" class="code-line"></p>
         </div>
       </div>
 
-      <div id="uncertain" class="warning hidden"></div>
+      <div class="research-note">🌐 Queste informazioni derivano da una ricerca approfondita dal web</div>
 
       <div class="info-grid">
         <article><span>👃</span><h3>Com'è</h3><p id="resultTaste"></p></article>
