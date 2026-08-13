@@ -1,8 +1,6 @@
 export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Metodo non consentito"
-    });
+    return res.status(405).json({ error: "Metodo non consentito" });
   }
 
   const apiKey = process.env.GROQ_API_KEY;
@@ -16,15 +14,9 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const mode = body.mode;
 
-  if (!["name", "image"].includes(mode)) {
-    return res.status(400).json({
-      error: "Richiesta non valida."
-    });
+  if (!["name", "ean"].includes(mode)) {
+    return res.status(400).json({ error: "Richiesta non valida." });
   }
-
-  // =====================================================
-  // FUNZIONE GENERICA GROQ
-  // =====================================================
 
   async function groqChat(payload) {
     const response = await fetch(
@@ -43,10 +35,8 @@ export default async function handler(req, res) {
 
     if (!response.ok) {
       console.error("Errore Groq:", data);
-
       throw new Error(
-        data?.error?.message ||
-        "Errore durante la richiesta al Sommelier AI."
+        data?.error?.message || "Errore durante la richiesta al Sommelier AI."
       );
     }
 
@@ -54,150 +44,78 @@ export default async function handler(req, res) {
   }
 
   try {
-    let wineQuery = "";
+    let query = "";
+    let ean = "";
 
-    // =====================================================
-    // 1. SCANSIONE ETICHETTA
-    // =====================================================
+    if (mode === "ean") {
+      ean = String(body.ean || "").replace(/\D/g, "");
 
-    if (mode === "image") {
-      const image = String(body.image || "");
-
-      if (
-        !/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(image)
-      ) {
+      if (!/^[0-9]{8}$|^[0-9]{12}$|^[0-9]{13}$|^[0-9]{14}$/.test(ean)) {
         return res.status(400).json({
-          error: "Formato immagine non supportato."
+          error: "Codice EAN/UPC non valido."
         });
       }
 
-      const visionResult = await groqChat({
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
-
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `
-Stai analizzando la fotografia dell'etichetta di una bottiglia di vino.
-
-Devi leggere con attenzione tutto ciò che riesci a vedere.
-
-Cerca soprattutto:
-
-- nome commerciale del vino
-- cantina o produttore
-- denominazione
-- vitigno, se scritto
-- regione o territorio
-- eventuale annata
-
-NON inventare parole che non riesci a leggere.
-
-Se riconosci almeno il nome del vino oppure il produttore,
-restituisci una sola frase del tipo:
-
-Nome vino | Produttore | Denominazione | Regione | Annata
-
-Inserisci solamente le informazioni realmente leggibili.
-
-Se invece non riesci assolutamente a leggere né nome né produttore,
-rispondi solamente:
-
-NON_IDENTIFICATO
-`
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: image
-                }
-              }
-            ]
-          }
-        ],
-
-        temperature: 0.1,
-        max_completion_tokens: 400
-      });
-
-      if (
-        !visionResult ||
-        visionResult
-          .toUpperCase()
-          .includes("NON_IDENTIFICATO")
-      ) {
-        return res.status(200).json({
-          wine: {
-            identified: false,
-            message:
-              "Non riesco a leggere bene questa etichetta. Prova ad avvicinarti alla bottiglia, evita i riflessi e scatta nuovamente la foto."
-          }
-        });
-      }
-
-      wineQuery = visionResult.trim();
+      query = `codice a barre EAN/UPC ${ean}`;
     }
 
-    // =====================================================
-    // 2. RICERCA MANUALE PER NOME
-    // =====================================================
-
     if (mode === "name") {
-      wineQuery = String(body.name || "").trim();
+      query = String(body.name || "").trim();
 
-      if (!wineQuery) {
+      if (!query) {
         return res.status(400).json({
           error: "Inserisci il nome del vino."
         });
       }
     }
 
-    // =====================================================
-    // 3. RICERCA ONLINE DEL VINO
-    // =====================================================
+    const researchPrompt =
+      mode === "ean"
+      ? `
+Cerca sul web ESATTAMENTE questo codice a barre di una bottiglia di vino:
 
-    const researchPrompt = `
-Sei un assistente specializzato in vini.
+${ean}
 
-Devi cercare informazioni sul seguente vino:
+L'obiettivo è capire a quale prodotto/vino appartiene il codice.
 
-"${wineQuery}"
+Cerca il numero esatto, anche racchiuso tra virgolette.
+Prova anche eventuali pagine di prodotto, cataloghi, ecommerce, siti del produttore,
+database pubblici di prodotti, schede vino e risultati indicizzati.
 
-Cerca sul web e prova a determinare con precisione:
-
-- nome completo
-- produttore o cantina
+Se trovi una corrispondenza affidabile, ricava:
+- nome completo del vino
+- produttore/cantina
 - regione o territorio
 - tipologia
 - vitigno o uvaggio
-- caratteristiche del gusto
-- abbinamenti gastronomici
+- gusto/caratteristiche
+- abbinamenti
 - temperatura di servizio
-- occasioni di consumo
 
-Dai priorità, quando disponibili, a:
+Se trovi più prodotti diversi con lo stesso risultato o non hai una corrispondenza
+ragionevolmente affidabile, dichiaralo chiaramente.
 
-1. sito ufficiale del produttore;
-2. sito ufficiale della cantina;
-3. consorzio della denominazione;
-4. fonti enologiche affidabili.
+Non inventare e non parlare di prezzo.
+`
+      : `
+Cerca sul web informazioni affidabili sul seguente vino:
 
-IMPORTANTE:
+"${query}"
 
-Se l'utente ha scritto soltanto un nome parziale
-ma esiste chiaramente un vino corrispondente,
-prova comunque ad identificarlo.
+Privilegia sito del produttore/cantina, consorzio della denominazione e fonti
+enologiche affidabili.
 
-NON rifiutare semplicemente perché manca l'annata.
+Ricava:
+- nome completo
+- produttore
+- regione/territorio
+- tipologia
+- vitigno/uvaggio
+- gusto
+- abbinamenti
+- temperatura di servizio
 
-NON parlare di prezzo.
-
-NON inventare informazioni.
-
-Scrivi una breve scheda informativa in italiano.
+Non inventare e non parlare di prezzo.
 `;
 
     let researchResult = "";
@@ -205,123 +123,64 @@ Scrivi una breve scheda informativa in italiano.
     try {
       researchResult = await groqChat({
         model: "groq/compound-mini",
-
-        messages: [
-          {
-            role: "user",
-            content: researchPrompt
-          }
-        ]
+        messages: [{ role: "user", content: researchPrompt }]
       });
     } catch (error) {
-      // Se la ricerca web non è disponibile,
-      // continuiamo comunque con il modello.
-      researchResult = `
-Il vino indicato dal cliente è:
-${wineQuery}
-
-Utilizza le tue conoscenze per identificarlo.
-Se qualche informazione non è sicura, omettila.
-`;
+      console.error("Ricerca web non disponibile:", error);
+      researchResult = "";
     }
-
-    // =====================================================
-    // 4. CREAZIONE DELLA SCHEDA PER LA LANDING
-    // =====================================================
 
     const finalPrompt = `
 Sei "Il Sommelier di Famila Sud Italia".
 
-Un cliente del supermercato vuole conoscere rapidamente
-le informazioni principali su un vino.
+Richiesta del cliente:
+${mode === "ean" ? `Codice EAN/UPC: ${ean}` : `Vino: ${query}`}
 
-Il vino cercato è:
+Risultati della ricerca web:
+${researchResult || "Nessun risultato web utilizzabile."}
 
-"${wineQuery}"
+Devi creare una scheda molto semplice per un cliente di supermercato.
 
-Queste sono le informazioni raccolte:
+REGOLE:
+- Per una ricerca EAN/UPC, identified=true SOLO se i risultati collegano il codice
+  a un vino/prodotto con ragionevole affidabilità.
+- Se il codice non permette di risalire al prodotto, identified=false.
+- Per una ricerca per nome, identified=true se il vino è ragionevolmente riconoscibile.
+- Non inventare dati.
+- Non parlare di prezzo.
+- Se un dato non è noto, usa una stringa vuota.
+- Rispondi SOLO con JSON valido, senza markdown.
 
-${researchResult}
-
-Devi creare una scheda MOLTO SEMPLICE e utile
-per una persona che si trova davanti allo scaffale.
-
-REGOLE IMPORTANTI:
-
-- Se il vino è ragionevolmente identificabile,
-  "identified" DEVE essere true.
-
-- Non impostare identified=false
-  soltanto perché manca l'annata.
-
-- Non impostare identified=false
-  soltanto perché il nome inserito dal cliente è incompleto.
-
-- Se hai identificato produttore e vino,
-  considera l'identificazione sufficiente.
-
-- Non inventare dati specifici non supportati.
-
-- Se non conosci un dato, puoi lasciare una stringa vuota.
-
-- Non parlare di prezzi.
-
-- Usa un linguaggio molto semplice.
-
-- NON usare termini tecnici inutili.
-
-- Non scrivere markdown.
-
-Restituisci ESCLUSIVAMENTE un JSON valido.
-
-Deve essere esattamente strutturato così:
-
+Formato se identificato:
 {
   "identified": true,
+  "ean": "${ean}",
   "name": "Nome completo del vino",
   "producer": "Cantina o produttore",
   "region": "Regione o territorio",
   "type": "Rosso, Bianco, Rosato, Spumante ecc.",
-  "grape": "Vitigno principale oppure uvaggio",
+  "grape": "Vitigno principale o uvaggio",
   "taste": "Descrizione semplice del gusto in massimo due frasi",
   "pairings": "3-5 abbinamenti consigliati",
   "temperature": "Temperatura ideale di servizio",
-  "ideal_for": "Una frase semplice sull'occasione ideale",
+  "ideal_for": "Occasione ideale",
   "confidence_note": ""
 }
 
-Usa identified=false SOLTANTO se non riesci realmente
-a capire quale vino stia cercando il cliente.
-
-In quel caso restituisci:
-
+Formato se non identificato:
 {
   "identified": false,
-  "message": "Non riesco a identificare con certezza questo vino. Prova a inserire anche il nome della cantina oppure fotografa l'etichetta."
+  "message": "Non riesco a collegare con certezza questo codice a un vino. Prova a cercare il vino per nome."
 }
 `;
 
     const finalResult = await groqChat({
       model: "openai/gpt-oss-20b",
-
-      messages: [
-        {
-          role: "user",
-          content: finalPrompt
-        }
-      ],
-
-      response_format: {
-        type: "json_object"
-      },
-
+      messages: [{ role: "user", content: finalPrompt }],
+      response_format: { type: "json_object" },
       temperature: 0.1,
       max_completion_tokens: 1200
     });
-
-    // =====================================================
-    // 5. LETTURA DEL JSON
-    // =====================================================
 
     const cleaned = finalResult
       .replace(/^```json\s*/i, "")
@@ -333,21 +192,17 @@ In quel caso restituisci:
 
     try {
       wine = JSON.parse(cleaned);
-    } catch (error) {
-      console.error(
-        "JSON non valido ricevuto:",
-        cleaned
-      );
-
+    } catch {
       return res.status(502).json({
-        error:
-          "Il Sommelier ha restituito una risposta non leggibile. Riprova."
+        error: "Il Sommelier ha restituito una risposta non leggibile. Riprova."
       });
     }
 
-    return res.status(200).json({
-      wine
-    });
+    if (mode === "ean" && wine.identified) {
+      wine.ean = ean;
+    }
+
+    return res.status(200).json({ wine });
 
   } catch (error) {
     console.error("Errore Sommelier:", error);
