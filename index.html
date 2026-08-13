@@ -6,6 +6,7 @@
   <meta name="theme-color" content="#ef4b00">
   <title>Il Sommelier di Famila Sud Italia</title>
   <link rel="stylesheet" href="styles.css">
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body>
   <main class="wrap">
@@ -20,9 +21,8 @@
           <div class="glass-emoji">🍷</div>
           <h1>Il Sommelier di<br><span>Famila Sud Italia</span></h1>
           <h2>Scopri il vino giusto<br>per ogni occasione</h2>
-          <p>Inquadra l'etichetta della bottiglia oppure scrivi il nome del vino. Ti raccontiamo in pochi secondi le informazioni più importanti.</p>
+          <p>Scansiona il codice a barre della bottiglia oppure scrivi il nome del vino. In pochi secondi trovi le informazioni più importanti.</p>
         </div>
-
         <div class="wine-scene" aria-hidden="true">
           <div class="bottle"><span></span></div>
           <div class="wineglass"></div>
@@ -30,12 +30,11 @@
       </section>
 
       <section class="actions">
-        <input id="cameraInput" type="file" accept="image/*" capture="environment" hidden>
         <button id="scanButton" class="scan-button" type="button">
-          <span class="camera">📷</span>
+          <span class="camera">▥</span>
           <span class="scan-copy">
-            <strong>SCANSIONA L'ETICHETTA</strong>
-            <small>Inquadra con la fotocamera l'etichetta della bottiglia</small>
+            <strong>SCANSIONA IL CODICE A BARRE</strong>
+            <small>Inquadra l'EAN/UPC stampato sulla bottiglia</small>
           </span>
         </button>
 
@@ -58,8 +57,8 @@
 
       <section class="benefits">
         <div><span>🍇</span><b>SCOPRI COM'È</b><small>Caratteristiche e gusto</small></div>
-        <div><span>🍽️</span><b>TROVA L'ABBINAMENTO</b><small>I migliori abbinamenti con i tuoi piatti</small></div>
-        <div><span>🌡️</span><b>SERVILO AL MEGLIO</b><small>La temperatura ideale di servizio</small></div>
+        <div><span>🍽️</span><b>TROVA L'ABBINAMENTO</b><small>I migliori abbinamenti</small></div>
+        <div><span>🌡️</span><b>SERVILO AL MEGLIO</b><small>Temperatura ideale</small></div>
       </section>
 
       <footer>
@@ -69,10 +68,33 @@
       </footer>
     </section>
 
+    <section id="scannerView" class="state-card hidden">
+      <button id="closeScanner" class="back" type="button">← Indietro</button>
+      <div class="scanner-head">
+        <div class="barcode-icon">▥</div>
+        <div>
+          <div class="eyebrow">SCANSIONE CODICE A BARRE</div>
+          <h2>Inquadra l'EAN della bottiglia</h2>
+          <p>Porta il codice a barre dentro il riquadro e tieni il telefono fermo.</p>
+        </div>
+      </div>
+
+      <div id="reader"></div>
+
+      <div class="manual-ean">
+        <p>Se la fotocamera non lo legge, inserisci il codice manualmente:</p>
+        <form id="eanForm">
+          <input id="eanInput" inputmode="numeric" pattern="[0-9]*" placeholder="Es. 800687010226" maxlength="14">
+          <button type="submit">Cerca EAN</button>
+        </form>
+      </div>
+      <p class="scanner-note">La scansione avviene sul dispositivo. Il numero letto viene poi usato per cercare il vino.</p>
+    </section>
+
     <section id="loading" class="state-card hidden">
       <div class="spinner"></div>
-      <h2>Sto riconoscendo il vino…</h2>
-      <p>Un attimo, il Sommelier sta preparando le informazioni più importanti.</p>
+      <h2 id="loadingTitle">Sto cercando il vino…</h2>
+      <p id="loadingText">Un attimo, il Sommelier sta verificando le informazioni più importanti.</p>
     </section>
 
     <section id="result" class="state-card hidden">
@@ -83,41 +105,26 @@
           <div class="eyebrow">IL SOMMELIER DI FAMILA SUD ITALIA</div>
           <h1 id="resultName"></h1>
           <p id="resultMeta"></p>
+          <p id="resultCode" class="code-line"></p>
         </div>
       </div>
 
       <div id="uncertain" class="warning hidden"></div>
 
       <div class="info-grid">
-        <article>
-          <span>👃</span>
-          <h3>Com'è</h3>
-          <p id="resultTaste"></p>
-        </article>
-        <article>
-          <span>🍽️</span>
-          <h3>Con cosa abbinarlo</h3>
-          <p id="resultPairings"></p>
-        </article>
-        <article>
-          <span>🌡️</span>
-          <h3>Come servirlo</h3>
-          <p id="resultTemp"></p>
-        </article>
-        <article>
-          <span>⭐</span>
-          <h3>Ideale per</h3>
-          <p id="resultIdeal"></p>
-        </article>
+        <article><span>👃</span><h3>Com'è</h3><p id="resultTaste"></p></article>
+        <article><span>🍽️</span><h3>Con cosa abbinarlo</h3><p id="resultPairings"></p></article>
+        <article><span>🌡️</span><h3>Come servirlo</h3><p id="resultTemp"></p></article>
+        <article><span>⭐</span><h3>Ideale per</h3><p id="resultIdeal"></p></article>
       </div>
 
-      <p class="note">Le informazioni sono indicative e possono variare in base ad annata e produttore. In caso di dubbio verifica sempre l'etichetta della bottiglia.</p>
+      <p class="note">Le informazioni sono indicative e possono variare in base ad annata e produttore. Verifica sempre l'etichetta della bottiglia.</p>
     </section>
 
     <section id="error" class="state-card hidden error-card">
       <div class="bang">!</div>
-      <h2>Non riesco a identificarlo con certezza</h2>
-      <p id="errorText">Prova a fotografare meglio l'etichetta oppure inserisci il nome del vino.</p>
+      <h2 id="errorTitle">Non riesco a identificarlo con certezza</h2>
+      <p id="errorText"></p>
       <button id="retryButton" class="retry" type="button">Riprova</button>
     </section>
   </main>
