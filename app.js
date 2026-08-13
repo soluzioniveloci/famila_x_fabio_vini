@@ -39,9 +39,9 @@ async function askSommelier(payload) {
   if (payload.mode === "ean") {
     $("loadingTitle").textContent = "Sto cercando il codice " + payload.ean + "…";
     $("loadingText").textContent = "Cerco online a quale vino appartiene e verifico le informazioni principali.";
-  } else {
-    $("loadingTitle").textContent = "Sto cercando il vino…";
-    $("loadingText").textContent = "Un attimo, il Sommelier sta verificando le informazioni più importanti.";
+  } else if (payload.mode === "image") {
+    $("loadingTitle").textContent = "Sto riconoscendo il vino…";
+    $("loadingText").textContent = "Analizzo la foto e poi verifico le informazioni sul web.";
   }
 
   try {
@@ -166,10 +166,20 @@ $("closeScanner").addEventListener("click", async () => {
   show(home);
 });
 
-$("wineForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const name = $("wineName").value.trim();
-  if (name) askSommelier({mode:"name", name});
+$("photoButton").addEventListener("click", () => $("photoInput").click());
+
+$("photoInput").addEventListener("change", e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (file.size > 8 * 1024 * 1024) {
+    $("errorTitle").textContent = "Foto troppo grande";
+    $("errorText").textContent = "Usa una foto inferiore a 8 MB.";
+    show(errorBox);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => askSommelier({mode:"image", image:reader.result});
+  reader.readAsDataURL(file);
 });
 
 $("eanForm").addEventListener("submit", e => {
