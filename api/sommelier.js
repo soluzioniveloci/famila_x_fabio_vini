@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   const body = req.body || {};
   const mode = body.mode;
 
-  if (!["name", "ean"].includes(mode)) {
+  if (!["image", "ean"].includes(mode)) {
     return res.status(400).json({ error: "Richiesta non valida." });
   }
 
@@ -58,15 +58,34 @@ export default async function handler(req, res) {
 
       query = `codice a barre EAN/UPC ${ean}`;
     }
+    if (mode === "image") {
+      const image = String(body.image || "");
+      if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(image)) {
+        return res.status(400).json({ error: "Formato immagine non supportato." });
+      }
 
-    if (mode === "name") {
-      query = String(body.name || "").trim();
+      const visionResult = await groqChat({
+        model: "qwen/qwen3.6-27b",
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: `Osserva questa foto di una bottiglia di vino o della sua etichetta. Leggi con attenzione e identifica senza inventare: nome del vino, produttore/cantina, denominazione, regione/territorio, eventuale annata e vitigno. Se riconosci almeno il nome o il produttore, rispondi con una sola riga sintetica. Se non riesci a leggere informazioni sufficienti, rispondi esattamente NON_IDENTIFICATO.`
+            },
+            { type: "image_url", image_url: { url: image } }
+          ]
+        }],
+        temperature: 0.1,
+        max_completion_tokens: 500
+      });
 
-      if (!query) {
-        return res.status(400).json({
-          error: "Inserisci il nome del vino."
+      if (!visionResult || visionResult.toUpperCase().includes("NON_IDENTIFICATO")) {
+        return res.status(200).json({
+          wine: { identified: false, message: "Non riesco a riconoscere il vino dalla foto. Prova con una foto più chiara oppure scansiona il codice a barre." }
         });
       }
+      query = visionResult.trim();
     }
 
     const researchPrompt =
@@ -98,7 +117,7 @@ ragionevolmente affidabile, dichiaralo chiaramente.
 Non inventare e non parlare di prezzo.
 `
       : `
-Cerca sul web informazioni affidabili sul seguente vino:
+Cerca sul web informazioni affidabili sul vino riconosciuto da questa foto:
 
 "${query}"
 
@@ -164,7 +183,6 @@ Formato se identificato:
   "pairings": "3-5 abbinamenti consigliati",
   "temperature": "Temperatura ideale di servizio",
   "ideal_for": "Occasione ideale",
-  "confidence_note": ""
 }
 
 Formato se non identificato:
