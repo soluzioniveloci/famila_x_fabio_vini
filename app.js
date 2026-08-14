@@ -18,16 +18,26 @@ function hideAll() {
 
 function show(el) {
   hideAll();
-  if (el) el.classList.remove("hidden");
-  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  if (el) {
+    el.classList.remove("hidden");
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: "smooth"
+  });
 }
 
 function value(v) {
-  return v && String(v).trim() ? String(v).trim() : "—";
+  return v && String(v).trim()
+    ? String(v).trim()
+    : "—";
 }
 
 function normalizeCode(raw) {
-  return String(raw || "").replace(/\D/g, "");
+  return String(raw || "")
+    .replace(/\D/g, "");
 }
 
 function validBarcode(code) {
@@ -41,7 +51,9 @@ async function askSommelier(payload) {
   if (payload.mode === "ean") {
     if ($("loadingTitle")) {
       $("loadingTitle").textContent =
-        "Sto cercando il codice " + payload.ean + "…";
+        "Sto cercando il codice " +
+        payload.ean +
+        "…";
     }
 
     if ($("loadingText")) {
@@ -52,7 +64,8 @@ async function askSommelier(payload) {
 
   if (payload.mode === "image") {
     if ($("loadingTitle")) {
-      $("loadingTitle").textContent = "Sto riconoscendo il vino…";
+      $("loadingTitle").textContent =
+        "Sto riconoscendo il vino…";
     }
 
     if ($("loadingText")) {
@@ -62,23 +75,31 @@ async function askSommelier(payload) {
   }
 
   try {
-    const response = await fetch("/api/sommelier", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(payload)
-    });
+    const response =
+      await fetch("/api/sommelier", {
+        method: "POST",
 
-    const data = await response.json();
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify(payload)
+      });
+
+    const data =
+      await response.json();
 
     if (!response.ok) {
       throw new Error(
-        data.error || "Errore del servizio."
+        data.error ||
+        "Errore del servizio."
       );
     }
 
-    const w = data.wine || {};
+    const w =
+      data.wine || {};
 
     if (!w.identified) {
       if ($("errorTitle")) {
@@ -97,7 +118,8 @@ async function askSommelier(payload) {
     }
 
     if ($("resultName")) {
-      $("resultName").textContent = value(w.name);
+      $("resultName").textContent =
+        value(w.name);
     }
 
     if ($("resultMeta")) {
@@ -132,21 +154,33 @@ async function askSommelier(payload) {
         value(w.ideal_for);
     }
 
-    if ($("resultCode")) {
-      $("resultCode").textContent =
-        w.ean ? "Codice: " + w.ean : "";
+    if ($("resultValue")) {
+      $("resultValue").textContent =
+        value(w.value_story);
     }
 
-    const uncertain = $("uncertain");
+    if ($("resultCode")) {
+      $("resultCode").textContent =
+        w.ean
+          ? "Codice: " + w.ean
+          : "";
+    }
+
+    const uncertain =
+      $("uncertain");
 
     if (uncertain) {
       if (w.confidence_note) {
         uncertain.textContent =
           w.confidence_note;
 
-        uncertain.classList.remove("hidden");
+        uncertain.classList.remove(
+          "hidden"
+        );
       } else {
-        uncertain.classList.add("hidden");
+        uncertain.classList.add(
+          "hidden"
+        );
       }
     }
 
@@ -173,7 +207,10 @@ async function startScanner() {
 
   show(scannerView);
 
-  if (typeof Html5Qrcode === "undefined") {
+  if (
+    typeof Html5Qrcode ===
+    "undefined"
+  ) {
     if ($("errorTitle")) {
       $("errorTitle").textContent =
         "Scanner non disponibile";
@@ -188,51 +225,76 @@ async function startScanner() {
     return;
   }
 
-  html5QrCode = new Html5Qrcode(
-    "reader",
-    {
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128
-      ],
-      verbose: false
-    }
-  );
+  html5QrCode =
+    new Html5Qrcode(
+      "reader",
+      {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats
+            .EAN_13,
 
-  const onSuccess = async decodedText => {
-    if (alreadyRead) return;
+          Html5QrcodeSupportedFormats
+            .EAN_8,
 
-    const code =
-      normalizeCode(decodedText);
+          Html5QrcodeSupportedFormats
+            .UPC_A,
 
-    if (!validBarcode(code)) return;
+          Html5QrcodeSupportedFormats
+            .UPC_E,
 
-    alreadyRead = true;
+          Html5QrcodeSupportedFormats
+            .CODE_128
+        ],
 
-    if (navigator.vibrate) {
-      navigator.vibrate(80);
-    }
+        verbose: false
+      }
+    );
 
-    await askSommelier({
-      mode: "ean",
-      ean: code
-    });
-  };
+  const onSuccess =
+    async decodedText => {
+
+      if (alreadyRead) {
+        return;
+      }
+
+      const code =
+        normalizeCode(
+          decodedText
+        );
+
+      if (
+        !validBarcode(code)
+      ) {
+        return;
+      }
+
+      alreadyRead = true;
+
+      if (navigator.vibrate) {
+        navigator.vibrate(80);
+      }
+
+      await askSommelier({
+        mode: "ean",
+        ean: code
+      });
+    };
 
   try {
     await html5QrCode.start(
       {
-        facingMode: "environment"
+        facingMode:
+          "environment"
       },
+
       {
         fps: 12,
 
         qrbox: (w, h) => ({
           width:
-            Math.floor(w * 0.88),
+            Math.floor(
+              w * 0.88
+            ),
 
           height:
             Math.floor(
@@ -243,11 +305,15 @@ async function startScanner() {
             )
         }),
 
-        aspectRatio: 1.777778,
-        disableFlip: false
+        aspectRatio:
+          1.777778,
+
+        disableFlip:
+          false
       },
 
       onSuccess,
+
       () => {}
     );
 
@@ -305,6 +371,7 @@ if ($("closeScanner")) {
       "click",
       async () => {
         await stopScanner();
+
         show(home);
       }
     );
@@ -318,7 +385,8 @@ if (
     .addEventListener(
       "click",
       () => {
-        $("photoInput").click();
+        $("photoInput")
+          .click();
       }
     );
 
@@ -330,23 +398,28 @@ if (
           e.target.files &&
           e.target.files[0];
 
-        if (!file) return;
+        if (!file) {
+          return;
+        }
 
         if (
           file.size >
           8 * 1024 * 1024
         ) {
           if ($("errorTitle")) {
-            $("errorTitle").textContent =
+            $("errorTitle")
+              .textContent =
               "Foto troppo grande";
           }
 
           if ($("errorText")) {
-            $("errorText").textContent =
+            $("errorText")
+              .textContent =
               "Usa una foto inferiore a 8 MB.";
           }
 
           show(errorBox);
+
           return;
         }
 
@@ -357,10 +430,14 @@ if (
           () =>
             askSommelier({
               mode: "image",
-              image: reader.result
+              image:
+                reader.result
             });
 
-        reader.readAsDataURL(file);
+        reader
+          .readAsDataURL(
+            file
+          );
       }
     );
 }
@@ -374,21 +451,27 @@ if ($("eanForm")) {
 
         const ean =
           normalizeCode(
-            $("eanInput")?.value
+            $("eanInput")
+              ?.value
           );
 
-        if (!validBarcode(ean)) {
+        if (
+          !validBarcode(ean)
+        ) {
           if ($("errorTitle")) {
-            $("errorTitle").textContent =
+            $("errorTitle")
+              .textContent =
               "Codice non valido";
           }
 
           if ($("errorText")) {
-            $("errorText").textContent =
+            $("errorText")
+              .textContent =
               "Inserisci un codice numerico da 8, 12, 13 o 14 cifre.";
           }
 
           show(errorBox);
+
           return;
         }
 
@@ -420,14 +503,16 @@ if ($("retryButton")) {
     );
 }
 
-document.addEventListener(
-  "visibilitychange",
-  async () => {
-    if (
-      document.hidden &&
-      scannerRunning
-    ) {
-      await stopScanner();
+document
+  .addEventListener(
+    "visibilitychange",
+    async () => {
+
+      if (
+        document.hidden &&
+        scannerRunning
+      ) {
+        await stopScanner();
+      }
     }
-  }
-);
+  );
