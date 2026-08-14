@@ -17,14 +17,12 @@
 
       <section class="hero">
         <div class="hero-copy">
-          <div class="glass-emoji">🍷</div>
           <h1>Il Sommelier<br><span>Virtuale</span></h1>
           <h2>Scopri il vino giusto<br>per ogni occasione</h2>
           <p>Scansiona il codice a barre oppure fotografa la bottiglia. In pochi secondi ottieni le informazioni più importanti sul vino.</p>
         </div>
-        <div class="wine-scene" aria-hidden="true">
-          <div class="bottle"><span></span></div>
-          <div class="wineglass"></div>
+        <div class="hero-photo">
+          <img src="hero-sommelier.png" alt="Il tuo Sommelier Virtuale">
         </div>
       </section>
 
@@ -52,7 +50,7 @@
       <section class="benefits">
         <div><span>🍇</span><b>SCOPRI COM'È</b><small>Caratteristiche e gusto</small></div>
         <div><span>🍽️</span><b>TROVA L'ABBINAMENTO</b><small>I migliori abbinamenti</small></div>
-        <div><span>🌡️</span><b>SERVILO AL MEGLIO</b><small>Temperatura ideale</small></div>
+        <div><span>💎</span><b>SCOPRI IL SUO VALORE</b><small>Cosa rende unico questo vino</small></div>
       </section>
 
       <footer>
@@ -70,9 +68,7 @@
           <p>Porta il codice a barre dentro il riquadro e tieni il telefono fermo.</p>
         </div>
       </div>
-
       <div id="reader"></div>
-
       <div class="manual-ean">
         <p>Se la fotocamera non lo legge, inserisci il codice manualmente:</p>
         <form id="eanForm">
@@ -92,7 +88,6 @@
     <section id="result" class="state-card hidden">
       <button id="backButton" class="back" type="button">← Nuova ricerca</button>
       <div class="result-head">
-        <div class="result-icon">🍷</div>
         <div>
           <div class="eyebrow">IL SOMMELIER VIRTUALE</div>
           <h1 id="resultName"></h1>
@@ -104,12 +99,23 @@
       <div class="research-note">🌐 Queste informazioni derivano da una ricerca approfondita dal web</div>
 
       <div class="info-grid">
-        <article><span>👃</span><h3>Com'è</h3><p id="resultTaste"></p></article>
-        <article><span>🍽️</span><h3>Con cosa abbinarlo</h3><p id="resultPairings"></p></article>
-        <article><span>🌡️</span><h3>Come servirlo</h3><p id="resultTemp"></p></article>
-        <article><span>⭐</span><h3>Ideale per</h3><p id="resultIdeal"></p></article>
+        <article>
+          <span>👃</span><h3>Com'è</h3><p id="resultTaste"></p>
+        </article>
+        <article>
+          <span>🍽️</span><h3>Con cosa abbinarlo</h3><p id="resultPairings"></p>
+        </article>
+        <article>
+          <span>🌡️</span><h3>Come gustarlo</h3>
+          <p><strong>Temperatura:</strong> <span id="resultTemp"></span></p>
+          <p class="ideal-line"><strong>Ideale per:</strong> <span id="resultIdeal"></span></p>
+        </article>
+        <article class="value-card">
+          <span>💎</span><h3>Cosa racconta il suo valore</h3><p id="resultValue"></p>
+        </article>
       </div>
 
+      <p id="uncertain" class="warning hidden"></p>
       <p class="note">Le informazioni sono indicative e possono variare in base ad annata e produttore. Verifica sempre l'etichetta della bottiglia.</p>
     </section>
 
@@ -120,7 +126,6 @@
       <button id="retryButton" class="retry" type="button">Riprova</button>
     </section>
   </main>
-
   <script src="app.js"></script>
 </body>
 </html>
