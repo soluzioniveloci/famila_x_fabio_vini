@@ -1,131 +1,75 @@
 <!doctype html>
-<html lang="it">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#ef4b00">
-  <title>Il Sommelier Virtuale</title>
-  <link rel="stylesheet" href="styles.css">
-  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-</head>
-<body>
-  <main class="wrap">
-    <section id="home" class="page-card">
-      <header class="brand">
-        <img src="logo-top.png" alt="Famila Superstore" class="top-logo">
-      </header>
+<html lang="it"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#ef4b00"><title>Il Sommelier Virtuale</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+</head><body><main class="wrap">
 
-      <section class="hero">
-        <div class="hero-copy">
-          <h1>Il Sommelier<br><span>Virtuale</span></h1>
-          <h2>Scopri il vino giusto<br>per ogni occasione</h2>
-          <p>Scansiona il codice a barre oppure fotografa la bottiglia. In pochi secondi ottieni le informazioni più importanti sul vino.</p>
-        </div>
-        <div class="hero-photo">
-          <img src="hero-sommelier.png" alt="Il tuo Sommelier Virtuale">
-        </div>
-      </section>
+<section id="home" class="page">
+<header class="brand"><img src="logo-top.png" class="top-logo" alt="Famila Superstore"></header>
+<section class="hero">
+<div class="hero-copy">
+<div class="kicker">IL TUO ASSISTENTE VINI</div>
+<h1>Il Sommelier <span>Virtuale</span></h1>
+<h2>Scopri il vino giusto per ogni occasione</h2>
+<p>Scansiona il codice a barre oppure fotografa la bottiglia. In pochi secondi ottieni le informazioni più utili per conoscerla, servirla e abbinarla.</p>
+</div>
+<div class="hero-photo"><img src="hero-sommelier.png" alt="Scansione di una bottiglia di vino"></div>
+</section>
 
-      <section class="actions">
-        <button id="scanButton" class="scan-button" type="button">
-          <span class="camera">▥</span>
-          <span class="scan-copy">
-            <strong>SCANSIONA IL CODICE A BARRE</strong>
-            <small>Inquadra l'EAN/UPC stampato sulla bottiglia</small>
-          </span>
-        </button>
+<section class="actions">
+<button id="scanButton" class="action primary" type="button">
+<span class="symbol barcode"></span><span><b>Scansiona il codice a barre</b><small>Inquadra l'EAN / UPC della bottiglia</small></span><i>›</i>
+</button>
+<div class="or"><span></span><b>oppure</b><span></span></div>
+<input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
+<button id="photoButton" class="action secondary" type="button">
+<span class="symbol photo"></span><span><b>Fotografa il vino</b><small>Scatta una foto nitida della bottiglia o dell'etichetta</small></span><i>›</i>
+</button>
+</section>
 
-        <div class="or"><i></i><b>oppure</b><i></i></div>
+<section class="home-points">
+<div><b>PROFILO</b><span>Caratteristiche e stile</span></div>
+<div><b>ABBINAMENTI</b><span>I piatti più adatti</span></div>
+<div><b>VALORE</b><span>Cosa contribuisce al suo posizionamento</span></div>
+</section>
+<footer><img src="logo-footer.png" class="footer-logo" alt="Famila Superstore"></footer>
+</section>
 
-        <input id="photoInput" type="file" accept="image/*" capture="environment" hidden>
-        <button id="photoButton" class="photo-button" type="button">
-          <span class="photo-icon">📷</span>
-          <span class="photo-copy">
-            <strong>FOTOGRAFA IL VINO</strong>
-            <small>Scatta una foto chiara della bottiglia o dell'etichetta</small>
-          </span>
-        </button>
-      </section>
+<section id="scannerView" class="state hidden">
+<button id="closeScanner" class="back">← Indietro</button>
+<div class="state-head"><div class="kicker">SCANSIONE EAN / UPC</div><h2>Inquadra il codice a barre</h2><p>Porta il codice all'interno del riquadro e tieni il telefono fermo.</p></div>
+<div id="reader"></div>
+<div class="manual"><b>Inserimento manuale</b><p>Se la fotocamera non lo legge, digita il codice.</p>
+<form id="eanForm"><input id="eanInput" inputmode="numeric" pattern="[0-9]*" placeholder="Es. 800687010226" maxlength="14"><button>Cerca</button></form></div>
+</section>
 
-      <section class="benefits">
-        <div><span>🍇</span><b>SCOPRI COM'È</b><small>Caratteristiche e gusto</small></div>
-        <div><span>🍽️</span><b>TROVA L'ABBINAMENTO</b><small>I migliori abbinamenti</small></div>
-        <div><span>💎</span><b>SCOPRI IL SUO VALORE</b><small>Cosa rende unico questo vino</small></div>
-      </section>
+<section id="loading" class="state center hidden">
+<div class="spinner"></div><div class="kicker">IL SOMMELIER VIRTUALE</div>
+<h2 id="loadingTitle">Sto cercando il vino…</h2><p id="loadingText"></p>
+</section>
 
-      <footer>
-        <img src="logo-footer.png" alt="Famila Superstore" class="footer-logo">
-      </footer>
-    </section>
+<section id="result" class="result hidden">
+<div class="result-bar"><button id="backButton" class="back">← Nuova ricerca</button><img src="logo-top.png" class="result-logo"></div>
+<header class="wine-head">
+<div class="kicker">IL SOMMELIER VIRTUALE</div><h1 id="resultName"></h1><p id="resultProducer" class="producer"></p>
+<div id="resultTags" class="tags"></div><p id="resultCode" class="code"></p>
+</header>
+<div class="research"><span></span>Queste informazioni derivano da una ricerca approfondita dal web</div>
 
-    <section id="scannerView" class="state-card hidden">
-      <button id="closeScanner" class="back" type="button">← Indietro</button>
-      <div class="scanner-head">
-        <div class="barcode-icon">▥</div>
-        <div>
-          <div class="eyebrow">SCANSIONE CODICE A BARRE</div>
-          <h2>Inquadra l'EAN della bottiglia</h2>
-          <p>Porta il codice a barre dentro il riquadro e tieni il telefono fermo.</p>
-        </div>
-      </div>
-      <div id="reader"></div>
-      <div class="manual-ean">
-        <p>Se la fotocamera non lo legge, inserisci il codice manualmente:</p>
-        <form id="eanForm">
-          <input id="eanInput" inputmode="numeric" pattern="[0-9]*" placeholder="Es. 800687010226" maxlength="14">
-          <button type="submit">Cerca EAN</button>
-        </form>
-      </div>
-      <p class="scanner-note">La scansione avviene sul dispositivo. Il numero letto viene poi usato per cercare il vino.</p>
-    </section>
+<div class="sections">
+<section class="info"><div class="num">01</div><div><div class="label">PROFILO DEL VINO</div><h2>Com'è</h2><p id="resultTaste"></p></div></section>
+<section class="info"><div class="num">02</div><div><div class="label">A TAVOLA</div><h2>Abbinamenti consigliati</h2><div id="pairingChips" class="chips"></div><p id="resultPairings"></p></div></section>
+<section class="info"><div class="num">03</div><div><div class="label">SERVIZIO E OCCASIONI</div><h2>Come gustarlo</h2>
+<div class="service"><div><small>Temperatura</small><strong id="resultTemp"></strong></div><div><small>Ideale per</small><strong id="resultIdeal"></strong></div></div></div></section>
+<section class="info value"><div class="num">04</div><div><div class="label">POSIZIONAMENTO</div><h2>Il valore del vino</h2><p id="resultValue"></p></div></section>
+</div>
+<p id="uncertain" class="warning hidden"></p>
+<p class="legal">Le informazioni sono indicative e possono variare in base ad annata e produttore. Verifica sempre l'etichetta della bottiglia.</p>
+</section>
 
-    <section id="loading" class="state-card hidden">
-      <div class="spinner"></div>
-      <h2 id="loadingTitle">Sto cercando il vino…</h2>
-      <p id="loadingText">Il Sommelier Virtuale sta analizzando e verificando le informazioni.</p>
-    </section>
+<section id="nonWine" class="state center hidden"><div class="status">×</div><div class="kicker">IL SOMMELIER VIRTUALE</div><h2>Questo prodotto non è un vino</h2><p id="nonWineText"></p><button id="nonWineRetry" class="retry">Prova con un vino</button></section>
+<section id="error" class="state center hidden"><div class="status">!</div><div class="kicker">IL SOMMELIER VIRTUALE</div><h2 id="errorTitle"></h2><p id="errorText"></p><button id="retryButton" class="retry">Riprova</button></section>
 
-    <section id="result" class="state-card hidden">
-      <button id="backButton" class="back" type="button">← Nuova ricerca</button>
-      <div class="result-head">
-        <div>
-          <div class="eyebrow">IL SOMMELIER VIRTUALE</div>
-          <h1 id="resultName"></h1>
-          <p id="resultMeta"></p>
-          <p id="resultCode" class="code-line"></p>
-        </div>
-      </div>
-
-      <div class="research-note">🌐 Queste informazioni derivano da una ricerca approfondita dal web</div>
-
-      <div class="info-grid">
-        <article>
-          <span>👃</span><h3>Com'è</h3><p id="resultTaste"></p>
-        </article>
-        <article>
-          <span>🍽️</span><h3>Con cosa abbinarlo</h3><p id="resultPairings"></p>
-        </article>
-        <article>
-          <span>🌡️</span><h3>Come gustarlo</h3>
-          <p><strong>Temperatura:</strong> <span id="resultTemp"></span></p>
-          <p class="ideal-line"><strong>Ideale per:</strong> <span id="resultIdeal"></span></p>
-        </article>
-        <article class="value-card">
-          <span>💎</span><h3>Cosa racconta il suo valore</h3><p id="resultValue"></p>
-        </article>
-      </div>
-
-      <p id="uncertain" class="warning hidden"></p>
-      <p class="note">Le informazioni sono indicative e possono variare in base ad annata e produttore. Verifica sempre l'etichetta della bottiglia.</p>
-    </section>
-
-    <section id="error" class="state-card hidden error-card">
-      <div class="bang">!</div>
-      <h2 id="errorTitle">Non riesco a identificarlo con certezza</h2>
-      <p id="errorText"></p>
-      <button id="retryButton" class="retry" type="button">Riprova</button>
-    </section>
-  </main>
-  <script src="app.js"></script>
-</body>
-</html>
+</main><script src="app.js"></script></body></html>
