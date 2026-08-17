@@ -22,11 +22,30 @@ export default async function handler(req, res) {
     });
   }
 
+  /*
+   * =====================================================
+   * FUNZIONI BASE
+   * =====================================================
+   */
+
   const sleep = ms =>
     new Promise(resolve => setTimeout(resolve, ms));
 
-  async function groqRequest(payload, retries = 2) {
-    for (let attempt = 0; attempt <= retries; attempt++) {
+  function cleanJson(text) {
+    return String(text || "")
+      .replace(/^```json\s*/i, "")
+      .replace(/^```\s*/i, "")
+      .replace(/\s*```$/i, "")
+      .trim();
+  }
+
+  async function groqRequest(payload, retries = 1) {
+
+    for (
+      let attempt = 0;
+      attempt <= retries;
+      attempt++
+    ) {
 
       const response = await fetch(
         "https://api.groq.com/openai/v1/chat/completions",
@@ -34,44 +53,58 @@ export default async function handler(req, res) {
           method: "POST",
 
           headers: {
-            Authorization: `Bearer ${apiKey}`,
-            "Content-Type": "application/json"
+            Authorization:
+              `Bearer ${apiKey}`,
+
+            "Content-Type":
+              "application/json"
           },
 
-          body: JSON.stringify(payload)
+          body:
+            JSON.stringify(payload)
         }
       );
 
-      const data = await response.json();
+      const data =
+        await response.json();
 
       if (response.ok) {
-        return data?.choices?.[0]?.message?.content || "";
+        return (
+          data?.choices?.[0]
+            ?.message?.content || ""
+        );
       }
 
       /*
        * RATE LIMIT
        */
-      if (response.status === 429 && attempt < retries) {
 
-        let waitMs = 3500;
+      if (
+        response.status === 429 &&
+        attempt < retries
+      ) {
+
+        let wait = 4000;
 
         const retryAfter =
-          response.headers.get("retry-after");
+          response.headers.get(
+            "retry-after"
+          );
 
         if (retryAfter) {
-          const seconds =
+          const sec =
             Number(retryAfter);
 
-          if (!Number.isNaN(seconds)) {
-            waitMs =
+          if (!Number.isNaN(sec)) {
+            wait =
               Math.max(
-                2500,
-                seconds * 1000
+                3000,
+                sec * 1000
               );
           }
         }
 
-        await sleep(waitMs);
+        await sleep(wait);
         continue;
       }
 
@@ -82,7 +115,7 @@ export default async function handler(req, res) {
 
       if (response.status === 429) {
         throw new Error(
-          "Il Sommelier Virtuale è momentaneamente molto richiesto. Riprova tra qualche secondo."
+          "RATE_LIMIT"
         );
       }
 
@@ -93,15 +126,8 @@ export default async function handler(req, res) {
     }
   }
 
-  function cleanJson(text) {
-    return String(text || "")
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
-  }
-
   async function groqJson(payload) {
+
     const raw =
       await groqRequest(payload);
 
@@ -110,13 +136,14 @@ export default async function handler(req, res) {
         cleanJson(raw)
       );
     } catch (error) {
+
       console.error(
         "JSON non valido:",
         raw
       );
 
       throw new Error(
-        "La risposta del Sommelier non è leggibile. Riprova."
+        "JSON_ERROR"
       );
     }
   }
@@ -124,16 +151,17 @@ export default async function handler(req, res) {
   try {
 
     let ean = "";
-    let wineQuery = "";
+    let identifiedFromPhoto = "";
 
     /*
-     * ==========================================
+     * =====================================================
      * FOTO
      *
-     * 1 SOLA chiamata Vision:
+     * UNA SOLA CHIAMATA VISION
+     *
      * - verifica se è vino
-     * - identifica la bottiglia
-     * ==========================================
+     * - identifica bottiglia
+     * =====================================================
      */
 
     if (mode === "image") {
@@ -168,20 +196,22 @@ export default async function handler(req, res) {
                   type: "text",
 
                   text: `
-Analizza questa fotografia.
+Analizza questa fotografia con estrema prudenza.
 
-PRIMA stabilisci se il prodotto è realmente un VINO.
+PRIMA devi stabilire se il prodotto è realmente un VINO.
 
 Sono considerati vino:
+
 - vino rosso
 - vino bianco
 - vino rosato
-- spumante
+- vino spumante
 - vino frizzante
 - Champagne
 - Prosecco
 
 NON sono vino:
+
 - birra
 - sidro
 - whisky
@@ -198,38 +228,39 @@ NON sono vino:
 - succhi
 - olio
 - aceto
-- altri prodotti.
+- alimenti
+- altri prodotti
 
-Non presumere che sia vino.
+NON presumere che una bottiglia contenga vino.
 
-Se non sei sicuro,
+Se non sei sufficientemente sicuro,
 identified deve essere false.
 
-Se è vino,
-leggi soltanto ciò che riesci realmente a vedere:
+Se è realmente vino,
+leggi soltanto ciò che è visibile:
 
-- nome
-- produttore/cantina
+- nome vino
+- produttore / cantina
+- tipologia
 - denominazione
 - regione
 - annata
 - vitigno
-- tipologia
 
-Rispondi SOLO JSON valido.
+Rispondi SOLO JSON.
 
-Se è vino:
+VINO:
 
 {
   "identified": true,
   "is_wine": true,
-  "name": "nome",
+  "name": "nome del vino",
   "producer": "produttore",
   "type": "tipologia",
-  "details": "tutte le informazioni leggibili utili alla ricerca"
+  "details": "altre informazioni utili visibili"
 }
 
-Se è chiaramente NON vino:
+NON VINO:
 
 {
   "identified": true,
@@ -237,7 +268,7 @@ Se è chiaramente NON vino:
   "category": "categoria prodotto"
 }
 
-Se non sei sicuro:
+INCERTO:
 
 {
   "identified": false,
@@ -247,7 +278,8 @@ Se non sei sicuro:
                 },
 
                 {
-                  type: "image_url",
+                  type:
+                    "image_url",
 
                   image_url: {
                     url: image
@@ -261,13 +293,18 @@ Se non sei sicuro:
             type: "json_object"
           },
 
+          /*
+           * OUTPUT MOLTO CORTO
+           */
+
           temperature: 0,
 
-          max_completion_tokens: 450
+          max_completion_tokens:
+            250
         });
 
       /*
-       * BLOCCO NON VINO
+       * NON VINO
        */
 
       if (
@@ -287,7 +324,7 @@ Se non sei sicuro:
       }
 
       /*
-       * FOTO NON CHIARA
+       * FOTO NON SUFFICIENTE
        */
 
       if (
@@ -297,6 +334,7 @@ Se non sei sicuro:
         return res.status(200).json({
           wine: {
             identified: false,
+            is_wine: false,
 
             message:
               "Non riesco a verificare con sufficiente certezza che il prodotto sia un vino. Prova a fotografare meglio la bottiglia o l'etichetta."
@@ -304,7 +342,7 @@ Se non sei sicuro:
         });
       }
 
-      wineQuery =
+      identifiedFromPhoto =
         [
           vision.name,
           vision.producer,
@@ -316,9 +354,9 @@ Se non sei sicuro:
     }
 
     /*
-     * ==========================================
+     * =====================================================
      * EAN
-     * ==========================================
+     * =====================================================
      */
 
     if (mode === "ean") {
@@ -338,186 +376,40 @@ Se non sei sicuro:
             "Codice EAN/UPC non valido."
         });
       }
-
-      wineQuery =
-        `EAN ${ean}`;
     }
 
     /*
-     * ==========================================
-     * UNA SOLA RICERCA WEB
+     * =====================================================
+     * UNICA RICERCA WEB
      *
-     * Compound Mini:
-     * identifica
-     * controlla categoria
-     * raccoglie info
-     * ==========================================
+     * COMPOUND MINI
+     *
+     * DEVE GIÀ PRODURRE IL JSON FINALE
+     *
+     * NIENTE SECONDO GPT-OSS.
+     * =====================================================
      */
 
-    const researchPrompt =
+    const searchPrompt =
       mode === "ean"
 
         ? `
-Cerca sul web il codice EAN esatto:
+Sei il backend del Sommelier Virtuale.
+
+Cerca sul web il codice EAN/UPC esatto:
 
 "${ean}"
 
-Prima identifica il prodotto.
+IMPORTANTE:
 
 NON presumere che sia vino.
 
-Devi specificare chiaramente se il prodotto è:
-- vino
-oppure
-- non vino.
+Prima identifica il prodotto e la sua categoria.
 
-Se non trovi una corrispondenza affidabile,
-scrivi NON IDENTIFICATO.
-
-Se è NON VINO,
-indica chiaramente:
-NON VINO
-e la categoria del prodotto.
-
-Se è un VINO,
-raccogli in modo sintetico:
-
-- nome completo
-- produttore/cantina
-- tipologia
-- regione
-- denominazione
-- vitigno/uvaggio
-- profilo gustativo
-- 3-5 abbinamenti
-- temperatura di servizio
-- occasioni ideali
-
-Cerca inoltre SOLO elementi verificabili
-che aiutano a raccontarne il posizionamento:
-
-- territorio
-- denominazione
-- metodo produttivo
-- affinamento
-- reputazione del produttore
-- caratteristiche distintive
-
-Puoi osservare il prezzo sul web
-solo come contesto interno.
-
-Non inventare.
-Mantieni la risposta sotto 900 parole.
-`
-
-        : `
-Cerca sul web questo vino identificato dalla fotografia:
-
-"${wineQuery}"
-
-Prima verifica che corrisponda realmente
-a un prodotto appartenente alla categoria VINO.
-
-Se scopri che NON è vino,
-scrivi chiaramente:
-NON VINO.
-
-Se non riesci a identificarlo con certezza,
-scrivi:
-NON IDENTIFICATO.
-
-Se è vino,
-raccogli sinteticamente:
-
-- nome completo
-- produttore
-- tipologia
-- regione
-- denominazione
-- vitigno
-- profilo gustativo
-- 3-5 abbinamenti
-- temperatura
-- occasioni ideali
-
-Raccogli inoltre SOLO elementi verificabili
-che aiutano a raccontarne il posizionamento:
-
-- territorio
-- denominazione
-- metodo produttivo
-- affinamento
-- reputazione
-- caratteristiche distintive
-
-Non inventare.
-Mantieni la risposta sotto 900 parole.
-`;
-
-    const research =
-      await groqRequest({
-
-        model:
-          "groq/compound-mini",
-
-        messages: [
-          {
-            role: "user",
-            content:
-              researchPrompt
-          }
-        ],
-
-        /*
-         * UNA SOLA RICERCA WEB
-         */
-        compound_custom: {
-          tools: {
-            enabled_tools: [
-              "web_search"
-            ]
-          }
-        }
-      });
-
-    /*
-     * ==========================================
-     * UNA SOLA CHIAMATA FINALE
-     *
-     * controlla NON VINO
-     * + genera direttamente la scheda.
-     * ==========================================
-     */
-
-    const final =
-      await groqJson({
-
-        model:
-          "openai/gpt-oss-20b",
-
-        messages: [
-          {
-            role: "user",
-
-            content: `
-Sei il backend del "Sommelier Virtuale".
-
-Devi analizzare il risultato della ricerca
-e restituire la scheda finale.
-
-RICERCA:
-
-${research}
-
-REGOLE DI SICUREZZA:
-
-1. NON dare per scontato che il prodotto sia vino.
-
-2. Se dalla ricerca emerge chiaramente
-che il prodotto NON è vino
-(es. birra, liquore, distillato,
-olio, acqua, bibita ecc.),
-restituisci:
+Se è chiaramente NON VINO
+(es. birra, sidro, liquore, distillato,
+olio, acqua, bibita o altro prodotto),
+restituisci SOLO:
 
 {
   "identified": false,
@@ -526,40 +418,33 @@ restituisci:
   "message": "Il prodotto identificato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini."
 }
 
-3. Se non riesci a identificarlo
-con sufficiente certezza:
+Se non trovi una corrispondenza affidabile:
 
 {
   "identified": false,
   "is_wine": false,
   "non_wine": false,
-  "message": "Non riesco a identificare con sufficiente certezza questo vino. Prova con una foto più chiara o con il codice a barre della bottiglia."
+  "message": "Non riesco a identificare con sufficiente certezza un vino associato a questo codice."
 }
 
-4. Genera una scheda completa
-SOLTANTO se sei ragionevolmente certo
-che il prodotto sia un vino.
+Se è realmente un VINO,
+cerca soltanto le informazioni necessarie per questa scheda:
 
-5. Non inventare informazioni.
+- nome
+- produttore
+- regione
+- tipologia
+- vitigno
+- profilo gusto
+- 3-5 abbinamenti
+- temperatura
+- occasioni ideali
+- elementi realmente verificati
+  che contribuiscono al posizionamento
 
-6. Se un dato non è disponibile,
-usa una stringa vuota.
+IMPORTANTE PER IL VALORE:
 
-7. Niente URL, citazioni o markdown.
-
-8. pairings:
-3-5 abbinamenti brevi,
-separati da virgola.
-
-9. value_story:
-massimo 2-3 frasi.
-
-Deve spiegare professionalmente
-gli elementi VERIFICATI
-che contribuiscono al valore
-e al posizionamento del vino.
-
-Non usare mai:
+Non dire mai:
 
 - costa tanto
 - costa poco
@@ -568,8 +453,8 @@ Non usare mai:
 - costoso
 - sovrapprezzato
 
-Per vini accessibili puoi valorizzare,
-solo se coerente:
+Se il vino è accessibile,
+puoi valorizzare SOLO se coerente:
 
 - freschezza
 - immediatezza
@@ -577,8 +462,8 @@ solo se coerente:
 - versatilità
 - facilità di abbinamento
 
-Per vini di fascia superiore puoi valorizzare,
-solo se verificati:
+Se è di posizionamento superiore,
+puoi valorizzare SOLO se verificati:
 
 - territorio
 - denominazione
@@ -587,53 +472,233 @@ solo se verificati:
 - affinamento
 - reputazione della cantina
 
-Non inventare elementi premium.
+NON inventare elementi premium.
 
-Se è vino rispondi SOLO JSON:
+Rispondi ESCLUSIVAMENTE JSON:
 
 {
   "identified": true,
   "is_wine": true,
   "non_wine": false,
   "ean": "${ean}",
-  "name": "Nome completo",
+  "name": "Nome vino",
   "producer": "Produttore",
   "region": "Regione",
   "type": "Tipologia",
   "grape": "Vitigno",
-  "taste": "Profilo del vino",
+  "taste": "Massimo 2 frasi",
   "pairings": "Abbinamento 1, Abbinamento 2, Abbinamento 3",
   "temperature": "Temperatura",
-  "ideal_for": "Occasioni ideali",
-  "value_story": "Spiegazione del valore",
+  "ideal_for": "Occasioni",
+  "value_story": "Massimo 2 frasi professionali",
   "confidence_note": ""
 }
-`
-          }
-        ],
 
-        response_format: {
-          type: "json_object"
+La risposta deve essere MOLTO sintetica.
+Non superare 350 parole totali.
+`
+
+        : `
+Sei il backend del Sommelier Virtuale.
+
+La fotografia è già stata verificata:
+il prodotto è un vino.
+
+Dati letti dalla foto:
+
+"${identifiedFromPhoto}"
+
+Cerca sul web il vino
+e verifica la sua identità.
+
+Se scopri che l'identificazione era sbagliata
+e il prodotto NON è vino:
+
+{
+  "identified": false,
+  "is_wine": false,
+  "non_wine": true,
+  "message": "Il prodotto identificato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini."
+}
+
+Se non riesci a identificarlo con certezza:
+
+{
+  "identified": false,
+  "is_wine": false,
+  "non_wine": false,
+  "message": "Non riesco a identificare questo vino con sufficiente certezza."
+}
+
+Se confermato come vino,
+cerca esclusivamente:
+
+- nome
+- produttore
+- regione
+- tipologia
+- vitigno
+- profilo gusto
+- 3-5 abbinamenti
+- temperatura
+- occasioni ideali
+- elementi verificati del suo posizionamento
+
+VALUE STORY:
+
+massimo 2 frasi.
+
+Non dire mai:
+
+- costa tanto
+- costa poco
+- economico
+- scarso
+- costoso
+- sovrapprezzato
+
+Non inventare
+barrique,
+vendemmia manuale,
+produzione limitata,
+lungo affinamento
+o altri elementi premium.
+
+Rispondi SOLO JSON:
+
+{
+  "identified": true,
+  "is_wine": true,
+  "non_wine": false,
+  "ean": "",
+  "name": "Nome vino",
+  "producer": "Produttore",
+  "region": "Regione",
+  "type": "Tipologia",
+  "grape": "Vitigno",
+  "taste": "Massimo 2 frasi",
+  "pairings": "Abbinamento 1, Abbinamento 2, Abbinamento 3",
+  "temperature": "Temperatura",
+  "ideal_for": "Occasioni",
+  "value_story": "Massimo 2 frasi professionali",
+  "confidence_note": ""
+}
+
+La risposta deve essere MOLTO sintetica.
+Non superare 350 parole.
+`;
+
+    /*
+     * =====================================================
+     * COMPOUND MINI
+     *
+     * UNA SOLA CHIAMATA.
+     * =====================================================
+     */
+
+    const raw =
+      await groqRequest(
+        {
+
+          model:
+            "groq/compound-mini",
+
+          messages: [
+            {
+              role: "user",
+              content:
+                searchPrompt
+            }
+          ],
+
+          /*
+           * UNA SOLA RICERCA WEB
+           */
+
+          compound_custom: {
+            tools: {
+              enabled_tools: [
+                "web_search"
+              ]
+            }
+          }
         },
 
-        temperature: 0.1,
-
         /*
-         * IMPORTANTE:
-         * output corto per consumare meno TPM.
+         * SOLO 1 RETRY
          */
-        max_completion_tokens: 700
+
+        1
+      );
+
+    /*
+     * =====================================================
+     * IL COMPOUND DEVE RESTITUIRE JSON
+     * =====================================================
+     */
+
+    let wine;
+
+    try {
+
+      wine =
+        JSON.parse(
+          cleanJson(raw)
+        );
+
+    } catch (error) {
+
+      console.error(
+        "Risposta non JSON:",
+        raw
+      );
+
+      return res.status(502).json({
+        error:
+          "Il Sommelier Virtuale non è riuscito a completare la ricerca. Riprova."
       });
+    }
+
+    /*
+     * SICUREZZA ULTERIORE
+     */
 
     if (
-      mode === "ean" &&
-      final.identified === true
+      wine.non_wine === true ||
+      wine.is_wine === false
     ) {
-      final.ean = ean;
+
+      return res.status(200).json({
+        wine
+      });
+    }
+
+    if (
+      wine.identified !== true ||
+      wine.is_wine !== true
+    ) {
+
+      return res.status(200).json({
+        wine: {
+          identified: false,
+
+          message:
+            wine.message ||
+            "Non riesco a identificare questo vino con sufficiente certezza."
+        }
+      });
+    }
+
+    /*
+     * EAN ORIGINALE
+     */
+
+    if (mode === "ean") {
+      wine.ean = ean;
     }
 
     return res.status(200).json({
-      wine: final
+      wine
     });
 
   } catch (error) {
@@ -644,29 +709,31 @@ Se è vino rispondi SOLO JSON:
     );
 
     /*
-     * Il cliente non vede più
-     * il messaggio tecnico Groq.
+     * RATE LIMIT
      */
 
-    const message =
-      String(
-        error?.message || ""
-      );
-
     if (
-      /rate limit|429|tokens per minute|tpm/i
-        .test(message)
+      /RATE_LIMIT|rate limit|429|tokens per minute|TPM/i
+        .test(
+          String(
+            error?.message || ""
+          )
+        )
     ) {
+
       return res.status(429).json({
         error:
           "Il Sommelier Virtuale è momentaneamente molto richiesto. Attendi qualche secondo e riprova."
       });
     }
 
+    /*
+     * ALTRI ERRORI
+     */
+
     return res.status(500).json({
       error:
-        message ||
-        "Si è verificato un problema durante la ricerca. Riprova."
+        "Si è verificato un problema durante la ricerca. Riprova tra qualche secondo."
     });
   }
 }
