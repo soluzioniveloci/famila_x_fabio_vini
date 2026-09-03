@@ -22,10 +22,6 @@ export default async function handler(req, res) {
     });
   }
 
-  /* ======================================================
-     UTILITÀ
-  ====================================================== */
-
   const sleep = ms =>
     new Promise(resolve => setTimeout(resolve, ms));
 
@@ -83,20 +79,25 @@ export default async function handler(req, res) {
         }
 
         depth++;
-      }
-
-      if (ch === "}") {
-        depth--;
+      } else if (ch === "}") {
+        if (depth > 0) {
+          depth--;
+        }
 
         if (
           depth === 0 &&
           start !== -1
         ) {
           const candidate =
-            cleaned.slice(start, i + 1);
+            cleaned.slice(
+              start,
+              i + 1
+            );
 
           try {
-            return JSON.parse(candidate);
+            return JSON.parse(
+              candidate
+            );
           } catch {
             start = -1;
           }
@@ -138,11 +139,10 @@ export default async function handler(req, res) {
     });
   }
 
-  /* ======================================================
-     GROQ
-  ====================================================== */
-
-  async function groqRequest(payload, retries = 1) {
+  async function groqRequest(
+    payload,
+    retries = 1
+  ) {
     for (
       let attempt = 0;
       attempt <= retries;
@@ -159,28 +159,27 @@ export default async function handler(req, res) {
                 `Bearer ${apiKey}`,
 
               "Content-Type":
-                "application/json",
-
-              "Groq-Model-Version":
-                "latest"
+                "application/json"
             },
 
             body:
-              JSON.stringify(payload)
+              JSON.stringify(
+                payload
+              )
           }
         );
 
       let data = {};
 
       try {
-        data = await response.json();
+        data =
+          await response.json();
       } catch {}
 
       if (response.ok) {
         return (
           data?.choices?.[0]
-            ?.message?.content ||
-          ""
+            ?.message?.content || ""
         );
       }
 
@@ -194,7 +193,8 @@ export default async function handler(req, res) {
         response.status === 429 &&
         attempt < retries
       ) {
-        let wait = 3500;
+        let wait =
+          3500;
 
         const retryAfter =
           response.headers.get(
@@ -203,10 +203,14 @@ export default async function handler(req, res) {
 
         if (retryAfter) {
           const seconds =
-            Number(retryAfter);
+            Number(
+              retryAfter
+            );
 
           if (
-            !Number.isNaN(seconds)
+            !Number.isNaN(
+              seconds
+            )
           ) {
             wait =
               Math.max(
@@ -217,11 +221,16 @@ export default async function handler(req, res) {
         }
 
         await sleep(wait);
+
         continue;
       }
 
-      if (response.status === 429) {
-        throw new Error("RATE_LIMIT");
+      if (
+        response.status === 429
+      ) {
+        throw new Error(
+          "RATE_LIMIT"
+        );
       }
 
       throw new Error(
@@ -255,10 +264,6 @@ export default async function handler(req, res) {
     return json;
   }
 
-  /* ======================================================
-     OPEN FOOD FACTS
-  ====================================================== */
-
   async function lookupBarcode(ean) {
     try {
       const fields = [
@@ -277,12 +282,15 @@ export default async function handler(req, res) {
         )}`;
 
       const response =
-        await fetch(url, {
-          headers: {
-            "User-Agent":
-              "Famila-Sommelier/1.0"
+        await fetch(
+          url,
+          {
+            headers: {
+              "User-Agent":
+                "Famila-Sommelier/1.0"
+            }
           }
-        });
+        );
 
       if (!response.ok) {
         return null;
@@ -298,7 +306,8 @@ export default async function handler(req, res) {
         return null;
       }
 
-      const p = data.product;
+      const p =
+        data.product;
 
       const name =
         p.product_name_it ||
@@ -309,11 +318,14 @@ export default async function handler(req, res) {
         normalize(
           [
             p.categories,
-            ...(Array.isArray(
-              p.categories_tags
+
+            ...(
+              Array.isArray(
+                p.categories_tags
+              )
+                ? p.categories_tags
+                : []
             )
-              ? p.categories_tags
-              : [])
           ].join(" ")
         );
 
@@ -358,37 +370,38 @@ export default async function handler(req, res) {
         "sidro"
       ];
 
-      if (
-        wineWords.some(word =>
-          categories.includes(word)
-        )
-      ) {
-        return {
-          status: "wine",
-          name,
-          brand: p.brands || "",
-          categories: p.categories || ""
-        };
-      }
+      let status =
+        "unknown";
 
       if (
-        nonWineWords.some(word =>
-          categories.includes(word)
+        wineWords.some(
+          word =>
+            categories.includes(
+              word
+            )
         )
       ) {
-        return {
-          status: "non_wine",
-          name,
-          brand: p.brands || "",
-          categories: p.categories || ""
-        };
+        status =
+          "wine";
+      } else if (
+        nonWineWords.some(
+          word =>
+            categories.includes(
+              word
+            )
+        )
+      ) {
+        status =
+          "non_wine";
       }
 
       return {
-        status: "unknown",
+        status,
         name,
-        brand: p.brands || "",
-        categories: p.categories || ""
+        brand:
+          p.brands || "",
+        categories:
+          p.categories || ""
       };
 
     } catch (error) {
@@ -401,21 +414,22 @@ export default async function handler(req, res) {
     }
   }
 
-  /* ======================================================
-     ELABORAZIONE
-  ====================================================== */
-
   try {
     let ean = "";
     let photoIdentity = "";
+    let barcodeInfo = null;
 
-    /* ====================================================
+    /* ===============================================
        FOTO
-    ==================================================== */
+    =============================================== */
 
-    if (mode === "image") {
+    if (
+      mode === "image"
+    ) {
       const image =
-        String(body.image || "");
+        String(
+          body.image || ""
+        );
 
       if (
         !/^data:image\/(jpeg|jpg|png|webp);base64,/i
@@ -452,7 +466,6 @@ Classifica il prodotto fotografato.
 Il servizio è esclusivamente dedicato ai vini.
 
 Status possibili:
-
 wine
 non_wine
 unknown
@@ -460,47 +473,51 @@ unknown
 WINE soltanto per:
 vino rosso, bianco, rosato,
 spumante, vino frizzante,
-Champagne, Prosecco o altro vino.
+Champagne, Prosecco
+o altro vino chiaramente riconoscibile.
 
 NON_WINE per:
 acqua, birra, sidro,
-distillato, liquore, bibita,
-succo, olio, aceto,
-alimento o qualsiasi altro prodotto.
+distillato, liquore,
+bibita, succo, olio,
+aceto, alimento
+o qualsiasi altro prodotto.
 
 UNKNOWN se non sei sicuro.
 
 Non presumere che una bottiglia sia vino.
 
 Se è vino leggi:
-nome, produttore, tipologia,
-regione e dettagli visibili.
+nome, produttore,
+tipologia, regione
+e dettagli visibili.
 
 Se non è vino identifica,
-se possibile, nome e categoria.
+se possibile,
+nome e categoria.
 
 Rispondi SOLO JSON:
 
 {
- "status":"wine",
- "name":"",
- "producer":"",
- "type":"",
- "details":""
+  "status":"wine",
+  "name":"",
+  "producer":"",
+  "type":"",
+  "details":""
 }
 
-oppure
+oppure:
 
 {
- "status":"non_wine",
- "product_name":"",
- "category":""
+  "status":"non_wine",
+  "product_name":"",
+  "category":""
 }
 
-oppure
+oppure:
 
 {
- "status":"unknown"
+  "status":"unknown"
 }
 `
                 },
@@ -563,16 +580,21 @@ oppure
           .join(" | ");
     }
 
-    /* ====================================================
+    /* ===============================================
        EAN
-    ==================================================== */
+    =============================================== */
 
-    let barcodeInfo = null;
-
-    if (mode === "ean") {
+    if (
+      mode === "ean"
+    ) {
       ean =
-        String(body.ean || "")
-          .replace(/\D/g, "");
+        String(
+          body.ean || ""
+        )
+          .replace(
+            /\D/g,
+            ""
+          );
 
       if (
         !(
@@ -588,120 +610,203 @@ oppure
         });
       }
 
-      barcodeInfo =
-        await lookupBarcode(ean);
-
       /*
-       * ACQUA/BIRRA/OLIO ECC.
-       * STOP IMMEDIATO.
+       * IMPORTANTE:
+       * il database è SOLO un indizio.
+       *
+       * NON blocchiamo più qui
+       * acqua/non-vino.
        */
-      if (
-        barcodeInfo?.status ===
-        "non_wine"
-      ) {
-        return nonWineResponse(
-          barcodeInfo.name ||
-          barcodeInfo.brand ||
-          ""
+      barcodeInfo =
+        await lookupBarcode(
+          ean
         );
-      }
     }
 
-    /* ====================================================
-       RICERCA COMPOUND
-    ==================================================== */
+    /* ===============================================
+       RICERCA WEB
+    =============================================== */
 
     let prompt = "";
 
-    if (mode === "ean") {
+    if (
+      mode === "ean"
+    ) {
       const known =
         barcodeInfo
           ? `
-Database barcode:
-Nome: ${barcodeInfo.name || "n/d"}
-Marca: ${barcodeInfo.brand || "n/d"}
-Categoria: ${barcodeInfo.categories || "n/d"}
-Classificazione preliminare: ${barcodeInfo.status}
+DATABASE BARCODE
+(SOLO INDIZIO - PUÒ ESSERE SBAGLIATO)
+
+Nome:
+${barcodeInfo.name || "n/d"}
+
+Marca:
+${barcodeInfo.brand || "n/d"}
+
+Categoria:
+${barcodeInfo.categories || "n/d"}
+
+Classificazione preliminare:
+${barcodeInfo.status}
 `
           : `
-Il database barcode non ha fornito
-un'identificazione affidabile.
+Il database barcode
+non ha fornito informazioni affidabili.
 `;
 
       prompt = `
-You are the backend of an Italian wine assistant.
+Sei il backend di un assistente vini italiano.
 
-Exact EAN/UPC:
+Devi identificare il prodotto associato
+all'EAN/UPC ESATTO:
 
-${ean}
+"${ean}"
 
 ${known}
 
-Search the web for this EXACT barcode.
+ATTENZIONE FONDAMENTALE:
 
-FIRST determine whether the product is actually wine.
+Le informazioni del database barcode
+sono soltanto un INDIZIO
+e possono contenere errori.
 
-Return only one JSON object.
+NON devi classificare un prodotto
+come non-vino basandoti
+soltanto sul database barcode.
 
-If it is definitely NOT wine:
+DEVI cercare l'EAN ESATTO sul web.
+
+Se il database barcode
+e le fonti web sono in conflitto,
+dai maggiore peso
+a più fonti web affidabili
+che riportano esplicitamente
+lo stesso EAN.
+
+Devi stabilire uno status:
+
+"wine"
+"non_wine"
+"unknown"
+
+
+-------------------------
+NON WINE
+-------------------------
+
+Usa:
 
 {
   "status":"non_wine",
-  "product_name":"product name",
-  "category":"category"
+  "product_name":"nome prodotto",
+  "category":"categoria"
 }
 
-If the product cannot be reliably identified:
+SOLTANTO quando
+la ricerca web conferma
+con ragionevole certezza
+che questo EAN appartiene
+a un prodotto non-vino:
+
+acqua,
+birra,
+sidro,
+distillato,
+liquore,
+bibita,
+succo,
+olio,
+aceto,
+alimento
+o altro prodotto non-vino.
+
+
+-------------------------
+UNKNOWN
+-------------------------
+
+Se:
+
+- non trovi l'EAN;
+- trovi risultati contrastanti;
+- non riesci a verificare
+  il prodotto con sufficiente certezza;
+
+restituisci:
 
 {
   "status":"unknown"
 }
 
-If it is definitely wine:
+
+-------------------------
+VINO
+-------------------------
+
+Se più informazioni affidabili
+confermano che l'EAN
+corrisponde a un vino:
 
 {
   "status":"wine",
-  "name":"full wine name",
-  "producer":"producer",
-  "region":"region",
-  "type":"wine type",
-  "grape":"grape",
-  "taste":"Italian description, maximum two sentences",
-  "pairings":"three to five Italian food pairings separated by commas",
-  "temperature":"serving temperature",
-  "ideal_for":"ideal occasions in Italian",
-  "value_story":"two professional Italian sentences explaining verified factors contributing to its positioning",
+  "name":"Nome completo del vino",
+  "producer":"Produttore",
+  "region":"Regione",
+  "type":"Tipologia",
+  "grape":"Vitigno",
+  "taste":"Descrizione in italiano, massimo 2 frasi",
+  "pairings":"3-5 abbinamenti in italiano separati da virgole",
+  "temperature":"Temperatura di servizio",
+  "ideal_for":"Occasioni ideali in italiano",
+  "value_story":"Massimo 2 frasi professionali in italiano sugli elementi verificati che contribuiscono al posizionamento",
   "confidence_note":""
 }
 
-Never invent information.
 
-Water, beer, spirits, liqueurs,
-soft drinks, juices, oils,
-vinegars and foods are NON_WINE.
+REGOLE:
 
-In value_story never say
-cheap, expensive, poor,
-overpriced or similar.
+Non inventare informazioni.
 
-Answer ONLY with the JSON object.
+Per il valore non usare:
+
+- costa tanto
+- costa poco
+- economico
+- scarso
+- costoso
+- sovrapprezzato
+
+Descrivi soltanto
+elementi realmente verificati,
+come territorio,
+denominazione,
+produttore,
+metodo produttivo,
+affinamento o stile,
+quando disponibili.
+
+Rispondi SOLO JSON.
 `;
 
     } else {
       prompt = `
-You are the backend of an Italian wine assistant.
+Sei il backend
+di un assistente vini italiano.
 
-The image classifier identified a probable wine.
+Il classificatore visivo
+ha identificato un probabile vino.
 
-Visible information:
+Informazioni visibili:
 
 ${photoIdentity}
 
-Search the web and identify the wine.
+Cerca sul web
+e verifica l'identità.
 
-Return ONLY JSON.
+Rispondi SOLO JSON.
 
-If it is not actually wine:
+Se scopri che NON è vino:
 
 {
   "status":"non_wine",
@@ -709,42 +814,33 @@ If it is not actually wine:
   "category":""
 }
 
-If identification is uncertain:
+Se non riesci
+a identificarlo con certezza:
 
 {
   "status":"unknown"
 }
 
-If confirmed as wine:
+Se è confermato vino:
 
 {
   "status":"wine",
-  "name":"full wine name",
-  "producer":"producer",
-  "region":"region",
-  "type":"wine type",
-  "grape":"grape",
-  "taste":"Italian description, maximum two sentences",
-  "pairings":"three to five Italian food pairings separated by commas",
-  "temperature":"serving temperature",
-  "ideal_for":"ideal occasions in Italian",
-  "value_story":"two professional Italian sentences explaining verified factors contributing to its positioning",
+  "name":"Nome completo del vino",
+  "producer":"Produttore",
+  "region":"Regione",
+  "type":"Tipologia",
+  "grape":"Vitigno",
+  "taste":"Descrizione in italiano, massimo 2 frasi",
+  "pairings":"3-5 abbinamenti in italiano separati da virgole",
+  "temperature":"Temperatura di servizio",
+  "ideal_for":"Occasioni ideali in italiano",
+  "value_story":"Massimo 2 frasi professionali sugli elementi verificati che contribuiscono al posizionamento",
   "confidence_note":""
 }
 
-Never invent information.
+Non inventare informazioni.
 `;
     }
-
-    /*
-     * IMPORTANTE:
-     *
-     * NIENTE response_format qui.
-     *
-     * Compound Mini usa web search
-     * e poi il nostro parser
-     * estrae il JSON.
-     */
 
     const raw =
       await groqRequest(
@@ -754,8 +850,11 @@ Never invent information.
 
           messages: [
             {
-              role: "user",
-              content: prompt
+              role:
+                "user",
+
+              content:
+                prompt
             }
           ],
 
@@ -767,16 +866,12 @@ Never invent information.
             }
           }
         },
+
         1
       );
 
-    let wine =
+    const wine =
       extractJson(raw);
-
-    /*
-       Se Compound non restituisce JSON
-       NON mostriamo un errore tecnico.
-    */
 
     if (!wine) {
       console.error(
@@ -794,9 +889,9 @@ Never invent information.
         wine.status
       );
 
-    /* ====================================================
+    /* ===============================================
        NON VINO
-    ==================================================== */
+    =============================================== */
 
     if (
       status ===
@@ -809,9 +904,9 @@ Never invent information.
       );
     }
 
-    /* ====================================================
+    /* ===============================================
        UNKNOWN
-    ==================================================== */
+    =============================================== */
 
     if (
       status !== "wine"
@@ -825,15 +920,20 @@ Never invent information.
       );
     }
 
-    /* ====================================================
-       VINO
-    ==================================================== */
+    /* ===============================================
+       VINO CONFERMATO
+    =============================================== */
 
     return res.status(200).json({
       wine: {
-        identified: true,
-        is_wine: true,
-        non_wine: false,
+        identified:
+          true,
+
+        is_wine:
+          true,
+
+        non_wine:
+          false,
 
         ean:
           mode === "ean"
@@ -905,7 +1005,8 @@ Never invent information.
 
     const message =
       String(
-        error?.message || ""
+        error?.message ||
+        ""
       );
 
     if (
@@ -918,14 +1019,9 @@ Never invent information.
       });
     }
 
-    /*
-     * Qualsiasi errore di parsing
-     * diventa NON IDENTIFICATO,
-     * non pagina tecnica.
-     */
-
     if (
-      message === "JSON_ERROR"
+      message ===
+      "JSON_ERROR"
     ) {
       return unknownResponse(
         "Non riesco a identificare il prodotto con sufficiente certezza. Prova nuovamente."
