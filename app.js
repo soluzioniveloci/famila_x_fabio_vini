@@ -11,6 +11,7 @@ let html5QrCode = null;
 let scannerRunning = false;
 let alreadyRead = false;
 
+
 /* =========================================================
    NAVIGAZIONE
 ========================================================= */
@@ -41,28 +42,40 @@ function show(el) {
   });
 }
 
+
 /* =========================================================
    UTILITY
 ========================================================= */
 
-function val(v) {
-  return v && String(v).trim()
-    ? String(v).trim()
-    : "—";
+function val(value) {
+  const text = String(value || "").trim();
+  return text || "—";
 }
 
-function cleanCode(v) {
-  return String(v || "").replace(/\D/g, "");
+function cleanCode(value) {
+  return String(value || "")
+    .replace(/\D/g, "");
 }
 
-function validEAN(v) {
+function validEAN(value) {
   return (
-    /^[0-9]{8}$/.test(v) ||
-    /^[0-9]{12}$/.test(v) ||
-    /^[0-9]{13}$/.test(v) ||
-    /^[0-9]{14}$/.test(v)
+    /^[0-9]{8}$/.test(value) ||
+    /^[0-9]{12}$/.test(value) ||
+    /^[0-9]{13}$/.test(value) ||
+    /^[0-9]{14}$/.test(value)
   );
 }
+
+function showError(title, text) {
+  $("errorTitle").textContent =
+    title || "Si è verificato un problema";
+
+  $("errorText").textContent =
+    text || "Riprova tra qualche secondo.";
+
+  show(errorBox);
+}
+
 
 /* =========================================================
    TAG RISULTATO
@@ -79,10 +92,13 @@ function renderTags(wine) {
     wine.type,
     wine.region,
     wine.grape
-  ].filter(Boolean);
+  ]
+    .map(x => String(x || "").trim())
+    .filter(Boolean);
 
   [...new Set(values)].forEach(value => {
-    const tag = document.createElement("span");
+    const tag =
+      document.createElement("span");
 
     tag.className = "tag";
     tag.textContent = value;
@@ -90,6 +106,7 @@ function renderTags(wine) {
     container.appendChild(tag);
   });
 }
+
 
 /* =========================================================
    ABBINAMENTI
@@ -103,14 +120,19 @@ function renderPairings(value) {
 
   chips.innerHTML = "";
 
-  const raw = String(value || "").trim();
+  const raw =
+    String(value || "").trim();
 
-  const items = raw
-    .split(/,|;|\n|•/)
-    .map(x => x.trim())
-    .filter(Boolean);
+  const items =
+    raw
+      .split(/,|;|\n|•/)
+      .map(x => x.trim())
+      .filter(Boolean);
 
-  if (items.length < 2 || items.length > 8) {
+  if (
+    items.length < 2 ||
+    items.length > 8
+  ) {
     fallback.textContent = val(raw);
     fallback.classList.remove("hidden");
     return;
@@ -118,454 +140,257 @@ function renderPairings(value) {
 
   fallback.classList.add("hidden");
 
-  items.slice(0, 6).forEach(item => {
-    const chip = document.createElement("span");
+  items
+    .slice(0, 6)
+    .forEach(item => {
+      const chip =
+        document.createElement("span");
 
-    chip.className = "chip";
-    chip.textContent = item;
+      chip.className = "chip";
+      chip.textContent = item;
 
-    chips.appendChild(chip);
-  });
+      chips.appendChild(chip);
+    });
 }
 
-/* =========================================================
-   ERRORE
-========================================================= */
-
-function showError(title, message) {
-  if ($("errorTitle")) {
-    $("errorTitle").textContent =
-      title || "Si è verificato un problema";
-  }
-
-  if ($("errorText")) {
-    $("errorText").textContent =
-      message || "Riprova tra qualche secondo.";
-  }
-
-  show(errorBox);
-}
 
 /* =========================================================
-   COMPRESSIONE FOTO
-
-   IMPORTANTE:
-   la foto NON viene inviata nelle dimensioni originali
-   dell'iPhone.
-
-   Viene:
-   - ridimensionata
-   - convertita JPEG
-   - compressa
+   CARICAMENTO IMMAGINE
 ========================================================= */
 
-function compressImage(file) {
+function loadImage(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
     reader.onerror = () => {
       reject(
-        new Error("Non riesco a leggere la fotografia.")
+        new Error(
+          "Non riesco a leggere la fotografia."
+        )
       );
     };
 
-    reader.onload = event => {
+    reader.onload = () => {
       const img = new Image();
+
+      img.onload = () =>
+        resolve(img);
 
       img.onerror = () => {
         reject(
-          new Error("Non riesco ad elaborare la fotografia.")
+          new Error(
+            "Non riesco ad elaborare la fotografia."
+          )
         );
       };
 
-      img.onload = () => {
-        /*
-         * 1280 px sono più che sufficienti
-         * per leggere una normale etichetta,
-         * evitando richieste enormi.
-         */
-
-        const MAX_SIZE = 1280;
-
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height && width > MAX_SIZE) {
-          height = Math.round(
-            height * (MAX_SIZE / width)
-          );
-
-          width = MAX_SIZE;
-        } else if (
-          height >= width &&
-          height > MAX_SIZE
-        ) {
-          width = Math.round(
-            width * (MAX_SIZE / height)
-          );
-
-          height = MAX_SIZE;
-        }
-
-        const canvas =
-          document.createElement("canvas");
-
-        canvas.width = width;
-        canvas.height = height;
-
-        const ctx =
-          canvas.getContext("2d");
-
-        if (!ctx) {
-          reject(
-            new Error(
-              "Il browser non riesce ad elaborare la fotografia."
-            )
-          );
-          return;
-        }
-
-        /*
-         * Sfondo bianco:
-         * evita problemi nel caso di immagini
-         * con trasparenza.
-         */
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillRect(
-          0,
-          0,
-          width,
-          height
-        );
-
-        ctx.drawImage(
-          img,
-          0,
-          0,
-          width,
-          height
-        );
-
-        /*
-         * JPEG qualità 0.72.
-         *
-         * Abbastanza nitido per l'etichetta,
-         * ma molto più leggero dell'originale.
-         */
-
-        let compressed =
-          canvas.toDataURL(
-            "image/jpeg",
-            0.72
-          );
-
-        /*
-         * Seconda sicurezza.
-         *
-         * Se per qualche motivo il risultato
-         * è ancora troppo grande, riduciamo
-         * ulteriormente la qualità.
-         */
-
-        if (compressed.length > 1800000) {
-          compressed =
-            canvas.toDataURL(
-              "image/jpeg",
-              0.55
-            );
-        }
-
-        resolve(compressed);
-      };
-
-      img.src = event.target.result;
+      img.src = reader.result;
     };
 
     reader.readAsDataURL(file);
   });
 }
 
-/* =========================================================
-   CHIAMATA AL SOMMELIER
-========================================================= */
-
-async function ask(payload) {
-  await stopScanner();
-
-  show(loading);
-
-  if ($("loadingTitle")) {
-    $("loadingTitle").textContent =
-      payload.mode === "ean"
-        ? `Sto verificando il codice ${payload.ean}…`
-        : "Sto analizzando la bottiglia…";
-  }
-
-  if ($("loadingText")) {
-    $("loadingText").textContent =
-      payload.mode === "ean"
-        ? "Sto identificando il prodotto e verificando che si tratti realmente di un vino."
-        : "Sto leggendo l'etichetta e verificando che il prodotto sia realmente un vino.";
-  }
-
-  try {
-    const response = await fetch(
-      "/api/sommelier",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify(payload)
-      }
-    );
-
-    /*
-     * Non assumiamo che Vercel restituisca
-     * sempre JSON.
-     */
-
-    const raw = await response.text();
-
-    let data = {};
-
-    try {
-      data = raw ? JSON.parse(raw) : {};
-    } catch {
-      console.error(
-        "Risposta API non JSON:",
-        raw
-      );
-
-      throw new Error(
-        "Il servizio non ha restituito una risposta valida."
-      );
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        "Si è verificato un problema durante la ricerca."
-      );
-    }
-
-    const wine = data.wine || {};
-
-    /* -----------------------------------------------------
-       NON È VINO
-    ----------------------------------------------------- */
-
-    if (
-      wine.non_wine === true ||
-      wine.is_wine === false
-    ) {
-      if ($("nonWineText")) {
-        $("nonWineText").textContent =
-          wine.message ||
-          "Il prodotto identificato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini.";
-      }
-
-      show(nonWine);
-      return;
-    }
-
-    /* -----------------------------------------------------
-       NON IDENTIFICATO
-    ----------------------------------------------------- */
-
-    if (!wine.identified) {
-      showError(
-        "Non riesco a identificarlo con certezza",
-        wine.message ||
-        "Prova con una foto più chiara oppure scansiona il codice a barre."
-      );
-
-      return;
-    }
-
-    /* -----------------------------------------------------
-       RISULTATO VINO
-    ----------------------------------------------------- */
-
-    if ($("resultName")) {
-      $("resultName").textContent =
-        val(wine.name);
-    }
-
-    if ($("resultProducer")) {
-      $("resultProducer").textContent =
-        val(wine.producer);
-    }
-
-    if ($("resultCode")) {
-      $("resultCode").textContent =
-        wine.ean
-          ? `EAN / UPC ${wine.ean}`
-          : "";
-    }
-
-    renderTags(wine);
-
-    if ($("resultTaste")) {
-      $("resultTaste").textContent =
-        val(wine.taste);
-    }
-
-    renderPairings(wine.pairings);
-
-    if ($("resultTemp")) {
-      $("resultTemp").textContent =
-        val(wine.temperature);
-    }
-
-    if ($("resultIdeal")) {
-      $("resultIdeal").textContent =
-        val(wine.ideal_for);
-    }
-
-    if ($("resultValue")) {
-      $("resultValue").textContent =
-        val(wine.value_story);
-    }
-
-    const uncertain = $("uncertain");
-
-    if (uncertain) {
-      if (wine.confidence_note) {
-        uncertain.textContent =
-          wine.confidence_note;
-
-        uncertain.classList.remove(
-          "hidden"
-        );
-      } else {
-        uncertain.classList.add(
-          "hidden"
-        );
-      }
-    }
-
-    show(result);
-
-  } catch (error) {
-    console.error(
-      "Sommelier frontend:",
-      error
-    );
-
-    showError(
-      "Si è verificato un problema",
-      error?.message ||
-      "Riprova tra qualche secondo."
-    );
-  }
-}
 
 /* =========================================================
-   SCANNER EAN
+   COMPRESSIONE FOTO
+
+   Questa è la parte importante.
+
+   Foto iPhone:
+   3000/4000 px -> massimo 1200 px
+
+   Poi:
+   JPEG -> qualità ridotta automaticamente.
+
+   Obiettivo:
+   Base64 inferiore a circa 1.4 MB.
 ========================================================= */
 
-async function startScanner() {
-  alreadyRead = false;
+async function compressImage(file) {
+  const img =
+    await loadImage(file);
 
-  show(scannerView);
+  let width =
+    img.naturalWidth || img.width;
 
-  if (typeof Html5Qrcode === "undefined") {
-    showError(
-      "Scanner non disponibile",
-      "Non riesco a caricare lo scanner. Ricarica la pagina e riprova."
-    );
+  let height =
+    img.naturalHeight || img.height;
 
-    return;
+  const MAX_SIDE = 1200;
+
+  if (
+    width > MAX_SIDE ||
+    height > MAX_SIDE
+  ) {
+    const ratio =
+      Math.min(
+        MAX_SIDE / width,
+        MAX_SIDE / height
+      );
+
+    width =
+      Math.round(
+        width * ratio
+      );
+
+    height =
+      Math.round(
+        height * ratio
+      );
   }
 
-  html5QrCode =
-    new Html5Qrcode(
-      "reader",
-      {
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128
-        ],
+  let canvas =
+    document.createElement("canvas");
 
-        verbose: false
+  canvas.width = width;
+  canvas.height = height;
+
+  let ctx =
+    canvas.getContext(
+      "2d",
+      {
+        alpha: false
       }
     );
 
-  try {
-    await html5QrCode.start(
-      {
-        facingMode: "environment"
-      },
-
-      {
-        fps: 12,
-
-        qrbox: (width, height) => ({
-          width:
-            Math.floor(
-              width * 0.88
-            ),
-
-          height:
-            Math.floor(
-              Math.min(
-                150,
-                height * 0.30
-              )
-            )
-        }),
-
-        aspectRatio: 1.777778
-      },
-
-      async decodedText => {
-        if (alreadyRead) return;
-
-        const ean =
-          cleanCode(decodedText);
-
-        if (!validEAN(ean)) {
-          return;
-        }
-
-        alreadyRead = true;
-
-        if (navigator.vibrate) {
-          navigator.vibrate(80);
-        }
-
-        await ask({
-          mode: "ean",
-          ean
-        });
-      },
-
-      () => {}
-    );
-
-    scannerRunning = true;
-
-  } catch (error) {
-    scannerRunning = false;
-
-    console.error(
-      "Errore scanner:",
-      error
-    );
-
-    showError(
-      "Non riesco ad aprire la fotocamera",
-      "Consenti l'accesso alla fotocamera nel browser e riprova."
+  if (!ctx) {
+    throw new Error(
+      "Il browser non riesce ad elaborare la fotografia."
     );
   }
+
+  ctx.fillStyle = "#ffffff";
+
+  ctx.fillRect(
+    0,
+    0,
+    width,
+    height
+  );
+
+  ctx.drawImage(
+    img,
+    0,
+    0,
+    width,
+    height
+  );
+
+
+  /*
+   * TARGET estremamente prudente.
+   *
+   * Evitiamo di avvicinarci ai limiti
+   * del backend/Groq.
+   */
+  const TARGET_LENGTH =
+    1400000;
+
+  let quality = 0.78;
+
+  let dataUrl =
+    canvas.toDataURL(
+      "image/jpeg",
+      quality
+    );
+
+
+  /*
+   * Prima abbassiamo la qualità.
+   */
+  while (
+    dataUrl.length >
+      TARGET_LENGTH &&
+    quality > 0.48
+  ) {
+    quality -= 0.08;
+
+    dataUrl =
+      canvas.toDataURL(
+        "image/jpeg",
+        quality
+      );
+  }
+
+
+  /*
+   * Se ancora troppo grande,
+   * riduciamo fisicamente l'immagine.
+   */
+  while (
+    dataUrl.length >
+      TARGET_LENGTH &&
+    canvas.width > 700 &&
+    canvas.height > 700
+  ) {
+    const oldCanvas =
+      canvas;
+
+    const newWidth =
+      Math.round(
+        oldCanvas.width * 0.82
+      );
+
+    const newHeight =
+      Math.round(
+        oldCanvas.height * 0.82
+      );
+
+    canvas =
+      document.createElement(
+        "canvas"
+      );
+
+    canvas.width = newWidth;
+    canvas.height = newHeight;
+
+    ctx =
+      canvas.getContext(
+        "2d",
+        {
+          alpha: false
+        }
+      );
+
+    ctx.fillStyle =
+      "#ffffff";
+
+    ctx.fillRect(
+      0,
+      0,
+      newWidth,
+      newHeight
+    );
+
+    ctx.drawImage(
+      oldCanvas,
+      0,
+      0,
+      newWidth,
+      newHeight
+    );
+
+    dataUrl =
+      canvas.toDataURL(
+        "image/jpeg",
+        0.62
+      );
+  }
+
+
+  if (
+    dataUrl.length >
+    1800000
+  ) {
+    throw new Error(
+      "La fotografia è ancora troppo pesante. Avvicinati all'etichetta e riprova."
+    );
+  }
+
+  return dataUrl;
 }
+
 
 /* =========================================================
    STOP SCANNER
@@ -592,171 +417,567 @@ async function stopScanner() {
   }
 }
 
+
 /* =========================================================
-   EVENTI
+   CHIAMATA API
 ========================================================= */
 
-$("scanButton")?.addEventListener(
-  "click",
-  startScanner
-);
+async function ask(payload) {
+  await stopScanner();
 
-$("closeScanner")?.addEventListener(
-  "click",
-  async () => {
-    await stopScanner();
-    show(home);
+  show(loading);
+
+
+  if (
+    payload.mode === "ean"
+  ) {
+    $("loadingTitle").textContent =
+      `Sto verificando il codice ${payload.ean}…`;
+
+    $("loadingText").textContent =
+      "Identifico il prodotto, verifico che sia un vino e raccolgo le informazioni più utili.";
+  } else {
+    $("loadingTitle").textContent =
+      "Sto analizzando la bottiglia…";
+
+    $("loadingText").textContent =
+      "Leggo l'etichetta, verifico che sia realmente un vino e approfondisco le informazioni.";
   }
-);
+
+
+  const controller =
+    new AbortController();
+
+  const timeout =
+    setTimeout(
+      () => controller.abort(),
+      45000
+    );
+
+
+  try {
+    const response =
+      await fetch(
+        "/api/sommelier",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify(payload),
+
+          signal:
+            controller.signal
+        }
+      );
+
+
+    clearTimeout(timeout);
+
+
+    const raw =
+      await response.text();
+
+    let data = {};
+
+    try {
+      data =
+        raw
+          ? JSON.parse(raw)
+          : {};
+    } catch {
+      console.error(
+        "Risposta API non JSON:",
+        raw
+      );
+
+      throw new Error(
+        "Il servizio non ha restituito una risposta valida."
+      );
+    }
+
+
+    if (!response.ok) {
+      throw new Error(
+        data.error ||
+        "Si è verificato un problema durante la ricerca."
+      );
+    }
+
+
+    const wine =
+      data.wine || {};
+
+
+    /* =====================================================
+       NON VINO
+    ===================================================== */
+
+    if (
+      wine.non_wine === true
+    ) {
+      $("nonWineText").textContent =
+        wine.message ||
+        "Il prodotto identificato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini.";
+
+      show(nonWine);
+
+      return;
+    }
+
+
+    /* =====================================================
+       NON IDENTIFICATO
+    ===================================================== */
+
+    if (
+      wine.identified !== true
+    ) {
+      showError(
+        "Non riesco a identificarlo con certezza",
+        wine.message ||
+        "Prova con una foto più chiara oppure scansiona il codice a barre."
+      );
+
+      return;
+    }
+
+
+    /* =====================================================
+       VINO
+    ===================================================== */
+
+    $("resultName").textContent =
+      val(wine.name);
+
+    $("resultProducer").textContent =
+      val(wine.producer);
+
+    $("resultCode").textContent =
+      wine.ean
+        ? `EAN / UPC ${wine.ean}`
+        : "";
+
+
+    renderTags(wine);
+
+
+    $("resultTaste").textContent =
+      val(wine.taste);
+
+
+    renderPairings(
+      wine.pairings
+    );
+
+
+    $("resultTemp").textContent =
+      val(
+        wine.temperature
+      );
+
+
+    $("resultIdeal").textContent =
+      val(
+        wine.ideal_for
+      );
+
+
+    $("resultValue").textContent =
+      val(
+        wine.value_story
+      );
+
+
+    const uncertain =
+      $("uncertain");
+
+
+    if (uncertain) {
+      if (
+        wine.confidence_note
+      ) {
+        uncertain.textContent =
+          wine.confidence_note;
+
+        uncertain.classList.remove(
+          "hidden"
+        );
+      } else {
+        uncertain.classList.add(
+          "hidden"
+        );
+      }
+    }
+
+
+    show(result);
+
+  } catch (error) {
+    clearTimeout(timeout);
+
+    console.error(
+      "Sommelier frontend:",
+      error
+    );
+
+
+    if (
+      error?.name ===
+      "AbortError"
+    ) {
+      showError(
+        "La ricerca sta impiegando troppo tempo",
+        "Riprova tra qualche secondo."
+      );
+
+      return;
+    }
+
+
+    showError(
+      "Si è verificato un problema",
+      error?.message ||
+      "Riprova tra qualche secondo."
+    );
+  }
+}
+
+
+/* =========================================================
+   AVVIO SCANNER EAN
+========================================================= */
+
+async function startScanner() {
+  alreadyRead = false;
+
+  show(scannerView);
+
+
+  if (
+    typeof Html5Qrcode ===
+    "undefined"
+  ) {
+    showError(
+      "Scanner non disponibile",
+      "Non riesco a caricare lo scanner. Ricarica la pagina e riprova."
+    );
+
+    return;
+  }
+
+
+  html5QrCode =
+    new Html5Qrcode(
+      "reader",
+      {
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128
+        ],
+
+        verbose: false
+      }
+    );
+
+
+  try {
+    await html5QrCode.start(
+
+      {
+        facingMode:
+          "environment"
+      },
+
+      {
+        fps: 12,
+
+        qrbox: (
+          width,
+          height
+        ) => ({
+          width:
+            Math.floor(
+              width * 0.88
+            ),
+
+          height:
+            Math.floor(
+              Math.min(
+                150,
+                height * 0.30
+              )
+            )
+        }),
+
+        aspectRatio:
+          1.777778
+      },
+
+
+      async decodedText => {
+        if (alreadyRead) {
+          return;
+        }
+
+
+        const ean =
+          cleanCode(
+            decodedText
+          );
+
+
+        if (
+          !validEAN(ean)
+        ) {
+          return;
+        }
+
+
+        alreadyRead = true;
+
+
+        if (
+          navigator.vibrate
+        ) {
+          navigator.vibrate(
+            80
+          );
+        }
+
+
+        await ask({
+          mode: "ean",
+          ean
+        });
+      },
+
+
+      () => {}
+    );
+
+
+    scannerRunning = true;
+
+  } catch (error) {
+    scannerRunning = false;
+
+    console.error(
+      "Scanner:",
+      error
+    );
+
+
+    showError(
+      "Non riesco ad aprire la fotocamera",
+      "Consenti l'accesso alla fotocamera nel browser e riprova."
+    );
+  }
+}
+
+
+/* =========================================================
+   EVENTI SCANNER
+========================================================= */
+
+$("scanButton")
+  ?.addEventListener(
+    "click",
+    startScanner
+  );
+
+
+$("closeScanner")
+  ?.addEventListener(
+    "click",
+    async () => {
+      await stopScanner();
+      show(home);
+    }
+  );
+
 
 /* =========================================================
    FOTO
 ========================================================= */
 
-$("photoButton")?.addEventListener(
-  "click",
-  () => {
-    const input = $("photoInput");
+$("photoButton")
+  ?.addEventListener(
+    "click",
+    () => {
+      const input =
+        $("photoInput");
 
-    if (!input) return;
-
-    /*
-     * Consente di fotografare di nuovo
-     * anche lo stesso soggetto.
-     */
-
-    input.value = "";
-    input.click();
-  }
-);
-
-$("photoInput")?.addEventListener(
-  "change",
-  async event => {
-    const file =
-      event.target.files?.[0];
-
-    if (!file) return;
-
-    /*
-     * Accettiamo anche foto originali grandi.
-     * Verranno compresse prima dell'invio.
-     */
-
-    if (file.size > 25 * 1024 * 1024) {
-      showError(
-        "Foto troppo grande",
-        "Usa una fotografia inferiore a 25 MB."
-      );
-
-      return;
-    }
-
-    try {
-      show(loading);
-
-      if ($("loadingTitle")) {
-        $("loadingTitle").textContent =
-          "Sto preparando la fotografia…";
-      }
-
-      if ($("loadingText")) {
-        $("loadingText").textContent =
-          "Ottimizzo l'immagine per riconoscere meglio l'etichetta.";
-      }
-
-      const compressedImage =
-        await compressImage(file);
+      if (!input) return;
 
       /*
-       * Protezione finale.
+       * Permette di rifare anche
+       * la stessa fotografia.
        */
+      input.value = "";
 
-      if (
-        !compressedImage ||
-        compressedImage.length > 2500000
-      ) {
-        throw new Error(
-          "La fotografia è ancora troppo grande. Prova ad avvicinarti all'etichetta e scattare nuovamente."
-        );
+      input.click();
+    }
+  );
+
+
+$("photoInput")
+  ?.addEventListener(
+    "change",
+    async event => {
+
+      const file =
+        event.target.files?.[0];
+
+
+      if (!file) {
+        return;
       }
 
-      await ask({
-        mode: "image",
-        image: compressedImage
+
+      /*
+       * Limite sul file ORIGINALE.
+       * Verrà comunque compresso.
+       */
+      if (
+        file.size >
+        30 * 1024 * 1024
+      ) {
+        showError(
+          "Foto troppo grande",
+          "Scatta nuovamente la fotografia."
+        );
+
+        return;
+      }
+
+
+      try {
+        show(loading);
+
+        $("loadingTitle").textContent =
+          "Sto preparando la fotografia…";
+
+        $("loadingText").textContent =
+          "Ottimizzo l'immagine per leggere meglio la bottiglia e l'etichetta.";
+
+
+        const compressed =
+          await compressImage(
+            file
+          );
+
+
+        console.log(
+          "Foto compressa:",
+          Math.round(
+            compressed.length /
+            1024
+          ),
+          "KB base64"
+        );
+
+
+        await ask({
+          mode: "image",
+          image: compressed
+        });
+
+      } catch (error) {
+        console.error(
+          "Foto:",
+          error
+        );
+
+
+        showError(
+          "Non riesco ad elaborare la fotografia",
+          error?.message ||
+          "Prova a scattare nuovamente la foto."
+        );
+      }
+    }
+  );
+
+
+/* =========================================================
+   EAN MANUALE
+========================================================= */
+
+$("eanForm")
+  ?.addEventListener(
+    "submit",
+    event => {
+
+      event.preventDefault();
+
+
+      const ean =
+        cleanCode(
+          $("eanInput")?.value
+        );
+
+
+      if (
+        !validEAN(ean)
+      ) {
+        showError(
+          "Codice non valido",
+          "Inserisci un codice EAN / UPC valido."
+        );
+
+        return;
+      }
+
+
+      ask({
+        mode: "ean",
+        ean
       });
-
-    } catch (error) {
-      console.error(
-        "Compressione fotografia:",
-        error
-      );
-
-      showError(
-        "Non riesco ad elaborare la fotografia",
-        error?.message ||
-        "Scatta nuovamente la foto e riprova."
-      );
     }
-  }
-);
+  );
+
 
 /* =========================================================
-   INSERIMENTO MANUALE EAN
+   RITORNO
 ========================================================= */
 
-$("eanForm")?.addEventListener(
-  "submit",
-  event => {
-    event.preventDefault();
+$("backButton")
+  ?.addEventListener(
+    "click",
+    () => show(home)
+  );
 
-    const ean =
-      cleanCode(
-        $("eanInput")?.value
-      );
 
-    if (!validEAN(ean)) {
-      showError(
-        "Codice non valido",
-        "Inserisci un codice EAN / UPC valido."
-      );
+$("retryButton")
+  ?.addEventListener(
+    "click",
+    () => show(home)
+  );
 
-      return;
-    }
 
-    ask({
-      mode: "ean",
-      ean
-    });
-  }
-);
+$("nonWineRetry")
+  ?.addEventListener(
+    "click",
+    () => show(home)
+  );
+
 
 /* =========================================================
-   PULSANTI RITORNO
-========================================================= */
-
-$("backButton")?.addEventListener(
-  "click",
-  () => show(home)
-);
-
-$("retryButton")?.addEventListener(
-  "click",
-  () => show(home)
-);
-
-$("nonWineRetry")?.addEventListener(
-  "click",
-  () => show(home)
-);
-
-/* =========================================================
-   TELEFONO IN BACKGROUND
+   STOP CAMERA QUANDO L'APP VA IN BACKGROUND
 ========================================================= */
 
 document.addEventListener(
   "visibilitychange",
   async () => {
+
     if (
       document.hidden &&
       scannerRunning
