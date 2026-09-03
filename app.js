@@ -11,7 +11,6 @@ let html5QrCode = null;
 let scannerRunning = false;
 let alreadyRead = false;
 
-
 /* =========================================================
    NAVIGAZIONE
 ========================================================= */
@@ -42,9 +41,8 @@ function show(el) {
   });
 }
 
-
 /* =========================================================
-   UTILITÀ
+   UTILITY
 ========================================================= */
 
 function val(v) {
@@ -53,12 +51,11 @@ function val(v) {
     : "—";
 }
 
-function code(v) {
-  return String(v || "")
-    .replace(/\D/g, "");
+function cleanCode(v) {
+  return String(v || "").replace(/\D/g, "");
 }
 
-function valid(v) {
+function validEAN(v) {
   return (
     /^[0-9]{8}$/.test(v) ||
     /^[0-9]{12}$/.test(v) ||
@@ -67,47 +64,38 @@ function valid(v) {
   );
 }
 
-
 /* =========================================================
-   TAG DEL VINO
+   TAG RISULTATO
 ========================================================= */
 
-function tags(w) {
+function renderTags(wine) {
+  const container = $("resultTags");
 
-  const target = $("resultTags");
+  if (!container) return;
 
-  if (!target) return;
-
-  target.innerHTML = "";
+  container.innerHTML = "";
 
   const values = [
-    w.type,
-    w.region,
-    w.grape
-  ]
-    .filter(Boolean)
-    .map(v => String(v).trim())
-    .filter(Boolean);
+    wine.type,
+    wine.region,
+    wine.grape
+  ].filter(Boolean);
 
-  [...new Set(values)]
-    .forEach(text => {
+  [...new Set(values)].forEach(value => {
+    const tag = document.createElement("span");
 
-      const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = value;
 
-      tag.className = "tag";
-      tag.textContent = text;
-
-      target.appendChild(tag);
-    });
+    container.appendChild(tag);
+  });
 }
-
 
 /* =========================================================
    ABBINAMENTI
 ========================================================= */
 
-function pairings(v) {
-
+function renderPairings(value) {
   const chips = $("pairingChips");
   const fallback = $("resultPairings");
 
@@ -115,581 +103,411 @@ function pairings(v) {
 
   chips.innerHTML = "";
 
-  const raw =
-    String(v || "").trim();
+  const raw = String(value || "").trim();
 
-  const items =
-    raw
-      .split(/,|;|\n|•/)
-      .map(x => x.trim())
-      .filter(Boolean);
+  const items = raw
+    .split(/,|;|\n|•/)
+    .map(x => x.trim())
+    .filter(Boolean);
 
-  if (
-    items.length < 2 ||
-    items.length > 8
-  ) {
-
-    fallback.textContent =
-      val(raw);
-
-    fallback.classList.remove(
-      "hidden"
-    );
-
+  if (items.length < 2 || items.length > 8) {
+    fallback.textContent = val(raw);
+    fallback.classList.remove("hidden");
     return;
   }
 
-  fallback.classList.add(
-    "hidden"
-  );
+  fallback.classList.add("hidden");
 
-  items
-    .slice(0, 6)
-    .forEach(item => {
+  items.slice(0, 6).forEach(item => {
+    const chip = document.createElement("span");
 
-      const chip =
-        document.createElement(
-          "span"
-        );
+    chip.className = "chip";
+    chip.textContent = item;
 
-      chip.className = "chip";
-      chip.textContent = item;
-
-      chips.appendChild(chip);
-    });
+    chips.appendChild(chip);
+  });
 }
 
+/* =========================================================
+   ERRORE
+========================================================= */
+
+function showError(title, message) {
+  if ($("errorTitle")) {
+    $("errorTitle").textContent =
+      title || "Si è verificato un problema";
+  }
+
+  if ($("errorText")) {
+    $("errorText").textContent =
+      message || "Riprova tra qualche secondo.";
+  }
+
+  show(errorBox);
+}
 
 /* =========================================================
    COMPRESSIONE FOTO
+
+   IMPORTANTE:
+   la foto NON viene inviata nelle dimensioni originali
+   dell'iPhone.
+
+   Viene:
+   - ridimensionata
+   - convertita JPEG
+   - compressa
 ========================================================= */
 
-function loadImageFromFile(file) {
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-  return new Promise(
-    (resolve, reject) => {
+    reader.onerror = () => {
+      reject(
+        new Error("Non riesco a leggere la fotografia.")
+      );
+    };
 
-      const reader =
-        new FileReader();
+    reader.onload = event => {
+      const img = new Image();
 
-      reader.onload = () => {
-
-        const img =
-          new Image();
-
-        img.onload = () =>
-          resolve(img);
-
-        img.onerror = () =>
-          reject(
-            new Error(
-              "Non riesco a leggere questa fotografia."
-            )
-          );
-
-        img.src =
-          reader.result;
+      img.onerror = () => {
+        reject(
+          new Error("Non riesco ad elaborare la fotografia.")
+        );
       };
 
-      reader.onerror = () =>
-        reject(
-          new Error(
-            "Errore durante la lettura della fotografia."
-          )
+      img.onload = () => {
+        /*
+         * 1280 px sono più che sufficienti
+         * per leggere una normale etichetta,
+         * evitando richieste enormi.
+         */
+
+        const MAX_SIZE = 1280;
+
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height && width > MAX_SIZE) {
+          height = Math.round(
+            height * (MAX_SIZE / width)
+          );
+
+          width = MAX_SIZE;
+        } else if (
+          height >= width &&
+          height > MAX_SIZE
+        ) {
+          width = Math.round(
+            width * (MAX_SIZE / height)
+          );
+
+          height = MAX_SIZE;
+        }
+
+        const canvas =
+          document.createElement("canvas");
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx =
+          canvas.getContext("2d");
+
+        if (!ctx) {
+          reject(
+            new Error(
+              "Il browser non riesce ad elaborare la fotografia."
+            )
+          );
+          return;
+        }
+
+        /*
+         * Sfondo bianco:
+         * evita problemi nel caso di immagini
+         * con trasparenza.
+         */
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(
+          0,
+          0,
+          width,
+          height
         );
 
-      reader.readAsDataURL(file);
-    }
-  );
-}
+        ctx.drawImage(
+          img,
+          0,
+          0,
+          width,
+          height
+        );
 
+        /*
+         * JPEG qualità 0.72.
+         *
+         * Abbastanza nitido per l'etichetta,
+         * ma molto più leggero dell'originale.
+         */
 
-async function compressImage(file) {
+        let compressed =
+          canvas.toDataURL(
+            "image/jpeg",
+            0.72
+          );
 
-  const img =
-    await loadImageFromFile(
-      file
-    );
+        /*
+         * Seconda sicurezza.
+         *
+         * Se per qualche motivo il risultato
+         * è ancora troppo grande, riduciamo
+         * ulteriormente la qualità.
+         */
 
-  /*
-   * 1280px sono più che sufficienti
-   * per leggere etichette e bottiglie.
-   */
-  const MAX_SIDE = 1280;
-
-  let width =
-    img.naturalWidth ||
-    img.width;
-
-  let height =
-    img.naturalHeight ||
-    img.height;
-
-  if (
-    width > MAX_SIDE ||
-    height > MAX_SIDE
-  ) {
-
-    const ratio =
-      Math.min(
-        MAX_SIDE / width,
-        MAX_SIDE / height
-      );
-
-    width =
-      Math.round(
-        width * ratio
-      );
-
-    height =
-      Math.round(
-        height * ratio
-      );
-  }
-
-
-  const canvas =
-    document.createElement(
-      "canvas"
-    );
-
-  canvas.width = width;
-  canvas.height = height;
-
-  const ctx =
-    canvas.getContext(
-      "2d",
-      {
-        alpha: false
-      }
-    );
-
-  /*
-   * Sfondo bianco:
-   * evita problemi con trasparenze.
-   */
-  ctx.fillStyle = "#ffffff";
-
-  ctx.fillRect(
-    0,
-    0,
-    width,
-    height
-  );
-
-  ctx.drawImage(
-    img,
-    0,
-    0,
-    width,
-    height
-  );
-
-
-  let quality = 0.80;
-
-  let dataUrl =
-    canvas.toDataURL(
-      "image/jpeg",
-      quality
-    );
-
-
-  /*
-   * Teniamoci MOLTO sotto i 4 MB
-   * richiesti da Groq.
-   *
-   * Base64 ~ 1,33 volte i byte reali.
-   */
-  const TARGET =
-    2.7 * 1024 * 1024;
-
-
-  while (
-    dataUrl.length > TARGET &&
-    quality > 0.45
-  ) {
-
-    quality -= 0.08;
-
-    dataUrl =
-      canvas.toDataURL(
-        "image/jpeg",
-        quality
-      );
-  }
-
-
-  /*
-   * Se ancora troppo grande,
-   * ridimensioniamo una seconda volta.
-   */
-  if (
-    dataUrl.length > TARGET
-  ) {
-
-    const smaller =
-      document.createElement(
-        "canvas"
-      );
-
-    smaller.width =
-      Math.round(
-        width * 0.75
-      );
-
-    smaller.height =
-      Math.round(
-        height * 0.75
-      );
-
-    const sctx =
-      smaller.getContext(
-        "2d",
-        {
-          alpha: false
+        if (compressed.length > 1800000) {
+          compressed =
+            canvas.toDataURL(
+              "image/jpeg",
+              0.55
+            );
         }
-      );
 
-    sctx.fillStyle =
-      "#ffffff";
+        resolve(compressed);
+      };
 
-    sctx.fillRect(
-      0,
-      0,
-      smaller.width,
-      smaller.height
-    );
+      img.src = event.target.result;
+    };
 
-    sctx.drawImage(
-      canvas,
-      0,
-      0,
-      smaller.width,
-      smaller.height
-    );
-
-    dataUrl =
-      smaller.toDataURL(
-        "image/jpeg",
-        0.70
-      );
-  }
-
-
-  return dataUrl;
+    reader.readAsDataURL(file);
+  });
 }
-
 
 /* =========================================================
-   RICHIESTA AL SOMMELIER
+   CHIAMATA AL SOMMELIER
 ========================================================= */
 
 async function ask(payload) {
-
-  await stop();
+  await stopScanner();
 
   show(loading);
 
-
-  if (
-    payload.mode === "ean"
-  ) {
-
+  if ($("loadingTitle")) {
     $("loadingTitle").textContent =
-      "Sto verificando il codice " +
-      payload.ean +
-      "…";
-
-    $("loadingText").textContent =
-      "Identifico il prodotto, verifico che sia un vino e raccolgo le informazioni più utili.";
-
-  } else {
-
-    $("loadingTitle").textContent =
-      "Sto analizzando la bottiglia…";
-
-    $("loadingText").textContent =
-      "Verifico prima che il prodotto sia realmente un vino, poi approfondisco le informazioni.";
+      payload.mode === "ean"
+        ? `Sto verificando il codice ${payload.ean}…`
+        : "Sto analizzando la bottiglia…";
   }
 
+  if ($("loadingText")) {
+    $("loadingText").textContent =
+      payload.mode === "ean"
+        ? "Sto identificando il prodotto e verificando che si tratti realmente di un vino."
+        : "Sto leggendo l'etichetta e verificando che il prodotto sia realmente un vino.";
+  }
 
   try {
+    const response = await fetch(
+      "/api/sommelier",
+      {
+        method: "POST",
 
-    const response =
-      await fetch(
-        "/api/sommelier",
-        {
-          method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
 
-          headers: {
-            "Content-Type":
-              "application/json"
-          },
+        body: JSON.stringify(payload)
+      }
+    );
 
-          body:
-            JSON.stringify(
-              payload
-            )
-        }
-      );
+    /*
+     * Non assumiamo che Vercel restituisca
+     * sempre JSON.
+     */
 
+    const raw = await response.text();
 
     let data = {};
 
     try {
-
-      data =
-        await response.json();
-
+      data = raw ? JSON.parse(raw) : {};
     } catch {
+      console.error(
+        "Risposta API non JSON:",
+        raw
+      );
 
       throw new Error(
         "Il servizio non ha restituito una risposta valida."
       );
     }
 
-
     if (!response.ok) {
-
       throw new Error(
         data.error ||
-        "Errore del servizio."
+        "Si è verificato un problema durante la ricerca."
       );
     }
 
+    const wine = data.wine || {};
 
-    const w =
-      data.wine || {};
-
-
-    /*
-     * =============================
-     * NON VINO CERTO
-     * =============================
-     */
+    /* -----------------------------------------------------
+       NON È VINO
+    ----------------------------------------------------- */
 
     if (
-      w.non_wine === true
+      wine.non_wine === true ||
+      wine.is_wine === false
     ) {
-
-      $("nonWineText")
-        .textContent =
-          w.message ||
+      if ($("nonWineText")) {
+        $("nonWineText").textContent =
+          wine.message ||
           "Il prodotto identificato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini.";
+      }
 
       show(nonWine);
+      return;
+    }
+
+    /* -----------------------------------------------------
+       NON IDENTIFICATO
+    ----------------------------------------------------- */
+
+    if (!wine.identified) {
+      showError(
+        "Non riesco a identificarlo con certezza",
+        wine.message ||
+        "Prova con una foto più chiara oppure scansiona il codice a barre."
+      );
 
       return;
     }
 
+    /* -----------------------------------------------------
+       RISULTATO VINO
+    ----------------------------------------------------- */
 
-    /*
-     * =============================
-     * NON IDENTIFICATO
-     * =============================
-     */
-
-    if (
-      w.identified !== true
-    ) {
-
-      $("errorTitle")
-        .textContent =
-          "Non riesco a identificarlo con certezza";
-
-      $("errorText")
-        .textContent =
-          w.message ||
-          "Prova con una foto più chiara oppure scansiona il codice a barre.";
-
-      show(errorBox);
-
-      return;
+    if ($("resultName")) {
+      $("resultName").textContent =
+        val(wine.name);
     }
 
+    if ($("resultProducer")) {
+      $("resultProducer").textContent =
+        val(wine.producer);
+    }
 
-    /*
-     * =============================
-     * RISULTATO VINO
-     * =============================
-     */
-
-    $("resultName")
-      .textContent =
-        val(w.name);
-
-    $("resultProducer")
-      .textContent =
-        val(w.producer);
-
-    $("resultCode")
-      .textContent =
-        w.ean
-          ? "EAN / UPC " + w.ean
+    if ($("resultCode")) {
+      $("resultCode").textContent =
+        wine.ean
+          ? `EAN / UPC ${wine.ean}`
           : "";
+    }
 
+    renderTags(wine);
 
-    tags(w);
+    if ($("resultTaste")) {
+      $("resultTaste").textContent =
+        val(wine.taste);
+    }
 
+    renderPairings(wine.pairings);
 
-    $("resultTaste")
-      .textContent =
-        val(w.taste);
+    if ($("resultTemp")) {
+      $("resultTemp").textContent =
+        val(wine.temperature);
+    }
 
+    if ($("resultIdeal")) {
+      $("resultIdeal").textContent =
+        val(wine.ideal_for);
+    }
 
-    pairings(
-      w.pairings
-    );
+    if ($("resultValue")) {
+      $("resultValue").textContent =
+        val(wine.value_story);
+    }
 
-
-    $("resultTemp")
-      .textContent =
-        val(
-          w.temperature
-        );
-
-
-    $("resultIdeal")
-      .textContent =
-        val(
-          w.ideal_for
-        );
-
-
-    $("resultValue")
-      .textContent =
-        val(
-          w.value_story
-        );
-
-
-    const uncertain =
-      $("uncertain");
-
+    const uncertain = $("uncertain");
 
     if (uncertain) {
-
-      if (
-        w.confidence_note
-      ) {
-
+      if (wine.confidence_note) {
         uncertain.textContent =
-          w.confidence_note;
+          wine.confidence_note;
 
         uncertain.classList.remove(
           "hidden"
         );
-
       } else {
-
         uncertain.classList.add(
           "hidden"
         );
       }
     }
 
-
     show(result);
 
-
   } catch (error) {
-
     console.error(
+      "Sommelier frontend:",
       error
     );
 
-
-    $("errorTitle")
-      .textContent =
-        "Si è verificato un problema";
-
-
-    $("errorText")
-      .textContent =
-        error.message ||
-        "Riprova tra qualche secondo.";
-
-
-    show(errorBox);
+    showError(
+      "Si è verificato un problema",
+      error?.message ||
+      "Riprova tra qualche secondo."
+    );
   }
 }
-
 
 /* =========================================================
    SCANNER EAN
 ========================================================= */
 
-async function start() {
-
+async function startScanner() {
   alreadyRead = false;
 
   show(scannerView);
 
-
-  if (
-    typeof Html5Qrcode ===
-    "undefined"
-  ) {
-
-    $("errorTitle")
-      .textContent =
-        "Scanner non disponibile";
-
-    $("errorText")
-      .textContent =
-        "Non riesco a caricare lo scanner. Controlla la connessione e riprova.";
-
-    show(errorBox);
+  if (typeof Html5Qrcode === "undefined") {
+    showError(
+      "Scanner non disponibile",
+      "Non riesco a caricare lo scanner. Ricarica la pagina e riprova."
+    );
 
     return;
   }
-
 
   html5QrCode =
     new Html5Qrcode(
       "reader",
       {
         formatsToSupport: [
-
-          Html5QrcodeSupportedFormats
-            .EAN_13,
-
-          Html5QrcodeSupportedFormats
-            .EAN_8,
-
-          Html5QrcodeSupportedFormats
-            .UPC_A,
-
-          Html5QrcodeSupportedFormats
-            .UPC_E,
-
-          Html5QrcodeSupportedFormats
-            .CODE_128
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128
         ],
 
         verbose: false
       }
     );
 
-
   try {
-
     await html5QrCode.start(
-
       {
-        facingMode:
-          "environment"
+        facingMode: "environment"
       },
 
       {
         fps: 12,
 
-        qrbox: (
-          width,
-          height
-        ) => ({
-
+        qrbox: (width, height) => ({
           width:
             Math.floor(
               width * 0.88
@@ -704,46 +522,24 @@ async function start() {
             )
         }),
 
-        aspectRatio:
-          1.777778
+        aspectRatio: 1.777778
       },
 
-
       async decodedText => {
-
-        if (
-          alreadyRead
-        ) {
-          return;
-        }
-
+        if (alreadyRead) return;
 
         const ean =
-          code(
-            decodedText
-          );
+          cleanCode(decodedText);
 
-
-        if (
-          !valid(ean)
-        ) {
+        if (!validEAN(ean)) {
           return;
         }
 
+        alreadyRead = true;
 
-        alreadyRead =
-          true;
-
-
-        if (
-          navigator.vibrate
-        ) {
-
-          navigator.vibrate(
-            80
-          );
+        if (navigator.vibrate) {
+          navigator.vibrate(80);
         }
-
 
         await ask({
           mode: "ean",
@@ -751,287 +547,221 @@ async function start() {
         });
       },
 
-
       () => {}
     );
 
-
-    scannerRunning =
-      true;
-
+    scannerRunning = true;
 
   } catch (error) {
+    scannerRunning = false;
 
-    scannerRunning =
-      false;
+    console.error(
+      "Errore scanner:",
+      error
+    );
 
-
-    $("errorTitle")
-      .textContent =
-        "Non riesco ad aprire la fotocamera";
-
-
-    $("errorText")
-      .textContent =
-        "Consenti l'accesso alla fotocamera nel browser e riprova.";
-
-
-    show(errorBox);
+    showError(
+      "Non riesco ad aprire la fotocamera",
+      "Consenti l'accesso alla fotocamera nel browser e riprova."
+    );
   }
 }
-
 
 /* =========================================================
    STOP SCANNER
 ========================================================= */
 
-async function stop() {
-
+async function stopScanner() {
   if (
     html5QrCode &&
     scannerRunning
   ) {
-
     try {
-
       await html5QrCode.stop();
-
     } catch {}
 
-
-    scannerRunning =
-      false;
+    scannerRunning = false;
   }
 
-
   if (html5QrCode) {
-
     try {
-
       html5QrCode.clear();
-
     } catch {}
 
-
-    html5QrCode =
-      null;
+    html5QrCode = null;
   }
 }
 
-
 /* =========================================================
-   EVENTI SCANNER
+   EVENTI
 ========================================================= */
 
-$("scanButton")
-  ?.addEventListener(
-    "click",
-    start
-  );
+$("scanButton")?.addEventListener(
+  "click",
+  startScanner
+);
 
-
-$("closeScanner")
-  ?.addEventListener(
-    "click",
-    async () => {
-
-      await stop();
-
-      show(home);
-    }
-  );
-
+$("closeScanner")?.addEventListener(
+  "click",
+  async () => {
+    await stopScanner();
+    show(home);
+  }
+);
 
 /* =========================================================
    FOTO
 ========================================================= */
 
-$("photoButton")
-  ?.addEventListener(
-    "click",
-    () => {
+$("photoButton")?.addEventListener(
+  "click",
+  () => {
+    const input = $("photoInput");
+
+    if (!input) return;
+
+    /*
+     * Consente di fotografare di nuovo
+     * anche lo stesso soggetto.
+     */
+
+    input.value = "";
+    input.click();
+  }
+);
+
+$("photoInput")?.addEventListener(
+  "change",
+  async event => {
+    const file =
+      event.target.files?.[0];
+
+    if (!file) return;
+
+    /*
+     * Accettiamo anche foto originali grandi.
+     * Verranno compresse prima dell'invio.
+     */
+
+    if (file.size > 25 * 1024 * 1024) {
+      showError(
+        "Foto troppo grande",
+        "Usa una fotografia inferiore a 25 MB."
+      );
+
+      return;
+    }
+
+    try {
+      show(loading);
+
+      if ($("loadingTitle")) {
+        $("loadingTitle").textContent =
+          "Sto preparando la fotografia…";
+      }
+
+      if ($("loadingText")) {
+        $("loadingText").textContent =
+          "Ottimizzo l'immagine per riconoscere meglio l'etichetta.";
+      }
+
+      const compressedImage =
+        await compressImage(file);
 
       /*
-       * Resetta il valore,
-       * così è possibile fotografare
-       * due volte la stessa immagine.
+       * Protezione finale.
        */
-      $("photoInput").value = "";
-
-      $("photoInput").click();
-    }
-  );
-
-
-$("photoInput")
-  ?.addEventListener(
-    "change",
-    async event => {
-
-      const file =
-        event.target.files?.[0];
-
-
-      if (!file) {
-        return;
-      }
-
-
-      /*
-       * Blocchiamo solo file enormi.
-       * Poi li comprimiamo.
-       */
-      if (
-        file.size >
-        25 * 1024 * 1024
-      ) {
-
-        $("errorTitle")
-          .textContent =
-            "Foto troppo grande";
-
-        $("errorText")
-          .textContent =
-            "Prova a scattare nuovamente la fotografia.";
-
-        show(errorBox);
-
-        return;
-      }
-
-
-      try {
-
-        show(loading);
-
-        $("loadingTitle")
-          .textContent =
-            "Sto preparando la fotografia…";
-
-        $("loadingText")
-          .textContent =
-            "Ottimizzo l'immagine per riconoscere meglio la bottiglia.";
-
-
-        const compressed =
-          await compressImage(
-            file
-          );
-
-
-        await ask({
-          mode: "image",
-          image: compressed
-        });
-
-
-      } catch (error) {
-
-        console.error(
-          error
-        );
-
-
-        $("errorTitle")
-          .textContent =
-            "Non riesco a leggere la fotografia";
-
-
-        $("errorText")
-          .textContent =
-            "Prova a scattare nuovamente la foto assicurandoti che la bottiglia o l'etichetta siano ben visibili.";
-
-
-        show(errorBox);
-      }
-    }
-  );
-
-
-/* =========================================================
-   EAN MANUALE
-========================================================= */
-
-$("eanForm")
-  ?.addEventListener(
-    "submit",
-    event => {
-
-      event.preventDefault();
-
-
-      const ean =
-        code(
-          $("eanInput")
-            ?.value
-        );
-
 
       if (
-        !valid(ean)
+        !compressedImage ||
+        compressedImage.length > 2500000
       ) {
-
-        $("errorTitle")
-          .textContent =
-            "Codice non valido";
-
-        $("errorText")
-          .textContent =
-            "Inserisci un codice EAN/UPC valido.";
-
-        show(errorBox);
-
-        return;
+        throw new Error(
+          "La fotografia è ancora troppo grande. Prova ad avvicinarti all'etichetta e scattare nuovamente."
+        );
       }
 
-
-      ask({
-        mode: "ean",
-        ean
+      await ask({
+        mode: "image",
+        image: compressedImage
       });
-    }
-  );
 
+    } catch (error) {
+      console.error(
+        "Compressione fotografia:",
+        error
+      );
+
+      showError(
+        "Non riesco ad elaborare la fotografia",
+        error?.message ||
+        "Scatta nuovamente la foto e riprova."
+      );
+    }
+  }
+);
 
 /* =========================================================
-   PULSANTI
+   INSERIMENTO MANUALE EAN
 ========================================================= */
 
-$("backButton")
-  ?.addEventListener(
-    "click",
-    () => show(home)
-  );
+$("eanForm")?.addEventListener(
+  "submit",
+  event => {
+    event.preventDefault();
 
+    const ean =
+      cleanCode(
+        $("eanInput")?.value
+      );
 
-$("retryButton")
-  ?.addEventListener(
-    "click",
-    () => show(home)
-  );
+    if (!validEAN(ean)) {
+      showError(
+        "Codice non valido",
+        "Inserisci un codice EAN / UPC valido."
+      );
 
+      return;
+    }
 
-$("nonWineRetry")
-  ?.addEventListener(
-    "click",
-    () => show(home)
-  );
-
+    ask({
+      mode: "ean",
+      ean
+    });
+  }
+);
 
 /* =========================================================
-   CHIUSURA SCANNER
+   PULSANTI RITORNO
+========================================================= */
+
+$("backButton")?.addEventListener(
+  "click",
+  () => show(home)
+);
+
+$("retryButton")?.addEventListener(
+  "click",
+  () => show(home)
+);
+
+$("nonWineRetry")?.addEventListener(
+  "click",
+  () => show(home)
+);
+
+/* =========================================================
+   TELEFONO IN BACKGROUND
 ========================================================= */
 
 document.addEventListener(
   "visibilitychange",
   async () => {
-
     if (
       document.hidden &&
       scannerRunning
     ) {
-
-      await stop();
+      await stopScanner();
     }
   }
 );
