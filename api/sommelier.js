@@ -1,116 +1,195 @@
 export default async function handler(req, res) {
 
-  /* ======================================================
-     CONTROLLO RICHIESTA
-  ====================================================== */
+  if (
+    req.method !== "POST"
+  ) {
 
-  if (req.method !== "POST") {
-    return res.status(405).json({
-      error: "Metodo non consentito"
-    });
+    return res
+      .status(405)
+      .json({
+        error:
+          "Metodo non consentito"
+      });
   }
 
-  const apiKey = process.env.GROQ_API_KEY;
+
+  const apiKey =
+    process.env
+      .GROQ_API_KEY;
+
 
   if (!apiKey) {
-    return res.status(500).json({
-      error: "GROQ_API_KEY non configurata su Vercel."
-    });
-  }
 
-  const body = req.body || {};
-  const mode = body.mode;
-
-  if (!["ean", "image"].includes(mode)) {
-    return res.status(400).json({
-      error: "Richiesta non valida."
-    });
+    return res
+      .status(500)
+      .json({
+        error:
+          "GROQ_API_KEY non configurata su Vercel."
+      });
   }
 
 
-  /* ======================================================
-     FUNZIONI DI SUPPORTO
-  ====================================================== */
-
-  const sleep = ms =>
-    new Promise(resolve => setTimeout(resolve, ms));
+  const body =
+    req.body || {};
 
 
-  function cleanText(text) {
-    return String(text || "")
-      .replace(/^```json\s*/i, "")
-      .replace(/^```\s*/i, "")
-      .replace(/\s*```$/i, "")
-      .trim();
+  const mode =
+    body.mode;
+
+
+  if (
+    ![
+      "ean",
+      "image"
+    ].includes(mode)
+  ) {
+
+    return res
+      .status(400)
+      .json({
+        error:
+          "Richiesta non valida."
+      });
   }
 
 
-  /*
-   * Estrae il primo oggetto JSON valido anche quando
-   * il modello mette del testo prima o dopo.
-   */
-  function extractJson(text) {
+  /* =====================================================
+     UTILITÀ
+  ===================================================== */
 
-    const cleaned = cleanText(text);
+  const sleep =
+    ms =>
+      new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            ms
+          )
+      );
 
-    /*
-     * Prima prova semplice.
-     */
+
+  function extractJson(
+    text
+  ) {
+
+    const cleaned =
+      String(
+        text || ""
+      )
+        .replace(
+          /^```json\s*/i,
+          ""
+        )
+        .replace(
+          /^```\s*/i,
+          ""
+        )
+        .replace(
+          /\s*```$/i,
+          ""
+        )
+        .trim();
+
+
     try {
-      return JSON.parse(cleaned);
+
+      return JSON.parse(
+        cleaned
+      );
+
     } catch {}
 
 
     /*
-     * Ricerca robusta dell'oggetto {...}
+     * Cerca un oggetto JSON
+     * anche se Groq aggiunge testo.
      */
+
     let start = -1;
     let depth = 0;
     let inString = false;
     let escaped = false;
 
-    for (let i = 0; i < cleaned.length; i++) {
 
-      const ch = cleaned[i];
+    for (
+      let i = 0;
+      i < cleaned.length;
+      i++
+    ) {
+
+      const char =
+        cleaned[i];
+
 
       if (inString) {
 
         if (escaped) {
+
           escaped = false;
+
           continue;
         }
 
-        if (ch === "\\") {
+
+        if (
+          char === "\\"
+        ) {
+
           escaped = true;
+
           continue;
         }
 
-        if (ch === '"') {
+
+        if (
+          char === '"'
+        ) {
+
           inString = false;
         }
 
+
         continue;
       }
 
-      if (ch === '"') {
+
+      if (
+        char === '"'
+      ) {
+
         inString = true;
+
         continue;
       }
 
-      if (ch === "{") {
 
-        if (depth === 0) {
+      if (
+        char === "{"
+      ) {
+
+        if (
+          depth === 0
+        ) {
+
           start = i;
         }
+
 
         depth++;
       }
 
-      if (ch === "}") {
 
-        if (depth > 0) {
+      if (
+        char === "}"
+      ) {
+
+        if (
+          depth > 0
+        ) {
+
           depth--;
         }
+
 
         if (
           depth === 0 &&
@@ -123,18 +202,45 @@ export default async function handler(req, res) {
               i + 1
             );
 
+
           try {
-            return JSON.parse(candidate);
+
+            return JSON.parse(
+              candidate
+            );
+
           } catch {
+
             start = -1;
           }
         }
       }
     }
 
+
     return null;
   }
 
+
+  function base64ApproxBytes(
+    dataUrl
+  ) {
+
+    const base64 =
+      String(dataUrl || "")
+        .split(",")[1] || "";
+
+
+    return (
+      base64.length *
+      0.75
+    );
+  }
+
+
+  /* =====================================================
+     GROQ
+  ===================================================== */
 
   async function groqRequest(
     payload,
@@ -151,42 +257,47 @@ export default async function handler(req, res) {
         await fetch(
           "https://api.groq.com/openai/v1/chat/completions",
           {
-            method: "POST",
+
+            method:
+              "POST",
 
             headers: {
+
               Authorization:
                 `Bearer ${apiKey}`,
 
               "Content-Type":
-                "application/json",
-
-              /*
-               * Usa la versione corrente dei tool Compound.
-               */
-              "Groq-Model-Version":
-                "latest"
+                "application/json"
             },
 
             body:
-              JSON.stringify(payload)
+              JSON.stringify(
+                payload
+              )
           }
         );
 
 
       let data = {};
 
+
       try {
-        data = await response.json();
-      } catch {
-        data = {};
-      }
+
+        data =
+          await response.json();
+
+      } catch {}
 
 
-      if (response.ok) {
+      if (
+        response.ok
+      ) {
 
         return (
-          data?.choices?.[0]
-            ?.message?.content || ""
+          data
+            ?.choices?.[0]
+            ?.message?.content ||
+          ""
         );
       }
 
@@ -194,50 +305,67 @@ export default async function handler(req, res) {
       /*
        * RATE LIMIT
        */
+
       if (
         response.status === 429 &&
         attempt < retries
       ) {
 
-        let waitMs = 4000;
+        let waitMs =
+          3500;
+
 
         const retryAfter =
           response.headers.get(
             "retry-after"
           );
 
+
         if (retryAfter) {
 
           const seconds =
-            Number(retryAfter);
+            Number(
+              retryAfter
+            );
+
 
           if (
-            !Number.isNaN(seconds)
+            !Number.isNaN(
+              seconds
+            )
           ) {
 
             waitMs =
               Math.max(
                 3000,
-                seconds * 1000
+                seconds *
+                  1000
               );
           }
         }
 
-        await sleep(waitMs);
+
+        await sleep(
+          waitMs
+        );
+
 
         continue;
       }
 
 
       console.error(
-        "Errore Groq:",
+        "Groq error:",
+        response.status,
         data
       );
 
 
       if (
-        response.status === 429
+        response.status ===
+        429
       ) {
+
         throw new Error(
           "RATE_LIMIT"
         );
@@ -245,7 +373,9 @@ export default async function handler(req, res) {
 
 
       throw new Error(
-        data?.error?.message ||
+        data
+          ?.error
+          ?.message ||
         "GROQ_ERROR"
       );
     }
@@ -257,55 +387,70 @@ export default async function handler(req, res) {
     retries = 1
   ) {
 
-    const raw =
+    const text =
       await groqRequest(
         payload,
         retries
       );
 
-    const parsed =
-      extractJson(raw);
 
-    if (!parsed) {
+    const json =
+      extractJson(
+        text
+      );
+
+
+    if (!json) {
 
       console.error(
-        "Risposta non interpretabile:",
-        raw
+        "JSON non valido:",
+        text
       );
+
 
       throw new Error(
         "JSON_ERROR"
       );
     }
 
-    return parsed;
+
+    return json;
   }
 
 
-  /* ======================================================
-     FUNZIONI DI RISPOSTA
-  ====================================================== */
+  /* =====================================================
+     RISPOSTE
+  ===================================================== */
 
   function nonWineResponse(
-    message
+    product = ""
   ) {
 
-    return res.status(200).json({
-      wine: {
-        identified: false,
-        non_wine: true,
+    const extra =
+      product
+        ? ` (${product})`
+        : "";
 
-        /*
-         * is_wine false SOLO
-         * quando siamo realmente sicuri.
-         */
-        is_wine: false,
 
-        message:
-          message ||
-          "Il prodotto identificato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini."
-      }
-    });
+    return res
+      .status(200)
+      .json({
+
+        wine: {
+
+          identified:
+            false,
+
+          is_wine:
+            false,
+
+          non_wine:
+            true,
+
+          message:
+            `Il prodotto identificato${extra} non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini.`
+        }
+      });
   }
 
 
@@ -313,46 +458,44 @@ export default async function handler(req, res) {
     message
   ) {
 
-    return res.status(200).json({
-      wine: {
-        /*
-         * IMPORTANTISSIMO:
-         * non inseriamo is_wine:false.
-         *
-         * Il tuo app.js interpreta is_wine:false
-         * come prodotto sicuramente non-vino.
-         */
-        identified: false,
-        non_wine: false,
+    return res
+      .status(200)
+      .json({
 
-        message:
-          message ||
-          "Non riesco a identificare il prodotto con sufficiente certezza. Prova nuovamente."
-      }
-    });
+        wine: {
+
+          identified:
+            false,
+
+          non_wine:
+            false,
+
+          message:
+            message ||
+            "Non riesco a identificare il prodotto con sufficiente certezza."
+        }
+      });
   }
 
 
-  /* ======================================================
+  /* =====================================================
      ELABORAZIONE
-  ====================================================== */
+  ===================================================== */
 
   try {
 
     let ean = "";
 
-    let photoIdentification = "";
+    let photoIdentity = "";
 
 
-    /* ====================================================
+    /* ===================================================
        FOTO
+    =================================================== */
 
-       Prima chiamata:
-       Qwen Vision verifica che sia davvero vino
-       e legge l'etichetta.
-    ==================================================== */
-
-    if (mode === "image") {
+    if (
+      mode === "image"
+    ) {
 
       const image =
         String(
@@ -365,12 +508,42 @@ export default async function handler(req, res) {
           .test(image)
       ) {
 
-        return res.status(400).json({
-          error:
-            "Formato immagine non supportato."
-        });
+        return res
+          .status(400)
+          .json({
+
+            error:
+              "Formato immagine non supportato."
+          });
       }
 
+
+      /*
+       * Ulteriore protezione dimensione.
+       */
+
+      if (
+        base64ApproxBytes(
+          image
+        ) >
+        3.5 *
+          1024 *
+          1024
+      ) {
+
+        return res
+          .status(413)
+          .json({
+
+            error:
+              "La fotografia è troppo grande. Riprova scattando nuovamente la foto."
+          });
+      }
+
+
+      /*
+       * QWEN VISION
+       */
 
       const vision =
         await groqJson(
@@ -379,31 +552,50 @@ export default async function handler(req, res) {
             model:
               "qwen/qwen3.6-27b",
 
+
+            /*
+             * Niente reasoning:
+             * più veloce,
+             * meno token,
+             * JSON più pulito.
+             */
+            reasoning_effort:
+              "none",
+
+            reasoning_format:
+              "hidden",
+
+
             messages: [
               {
 
-                role: "user",
+                role:
+                  "user",
 
                 content: [
 
                   {
-                    type: "text",
+
+                    type:
+                      "text",
 
                     text: `
-Analizza questa immagine come filtro di sicurezza
-per un servizio dedicato esclusivamente ai vini.
+Sei il filtro visivo del Sommelier Virtuale.
 
-Determina prima la categoria del prodotto.
+Il servizio è dedicato ESCLUSIVAMENTE ai vini.
 
-Usa ESATTAMENTE uno di questi status:
+Analizza attentamente la fotografia.
+
+Devi classificare il prodotto con uno
+e un solo status:
 
 "wine"
 "non_wine"
 "unknown"
 
 
-STATUS "wine" soltanto se la bottiglia
-è chiaramente un vino:
+Usa "wine" SOLTANTO quando
+la bottiglia è chiaramente:
 
 - vino rosso
 - vino bianco
@@ -412,9 +604,10 @@ STATUS "wine" soltanto se la bottiglia
 - vino frizzante
 - Champagne
 - Prosecco
+- altro prodotto chiaramente appartenente alla categoria vino
 
 
-STATUS "non_wine" se è chiaramente:
+Usa "non_wine" quando riconosci chiaramente:
 
 - acqua
 - birra
@@ -433,45 +626,60 @@ STATUS "non_wine" se è chiaramente:
 - olio
 - aceto
 - alimento
-- altro prodotto non-vino
+- qualsiasi altro prodotto non appartenente al vino
 
 
-STATUS "unknown" se la foto
-non permette di stabilirlo con sicurezza.
+Usa "unknown" se:
 
-NON presumere che una bottiglia contenga vino.
+- l'immagine è poco chiara
+- non si vede bene l'etichetta
+- non riesci a capire la categoria
+- hai qualsiasi dubbio
 
 
-Se status="wine",
-leggi inoltre soltanto ciò che è realmente visibile:
+NON presumere che una bottiglia sia vino.
 
-- nome vino
-- produttore/cantina
-- denominazione
+
+Se è vino,
+leggi soltanto informazioni realmente visibili:
+
+- nome
+- produttore
 - tipologia
+- denominazione
 - regione
 - annata
 - vitigno
 
 
-Rispondi SOLO JSON:
+Se NON vino,
+identifica se possibile categoria e nome prodotto.
+
+
+Rispondi SOLO JSON.
+
+
+VINO:
 
 {
   "status": "wine",
   "name": "nome",
   "producer": "produttore",
   "type": "tipologia",
-  "details": "altre informazioni leggibili"
+  "details": "dati utili leggibili"
 }
 
-oppure:
+
+NON VINO:
 
 {
   "status": "non_wine",
-  "category": "categoria identificata"
+  "category": "categoria",
+  "product_name": "nome se leggibile"
 }
 
-oppure:
+
+INCERTO:
 
 {
   "status": "unknown"
@@ -479,24 +687,33 @@ oppure:
 `
                   },
 
+
                   {
+
                     type:
                       "image_url",
 
                     image_url: {
-                      url: image
+
+                      url:
+                        image
                     }
                   }
                 ]
               }
             ],
 
+
             response_format: {
+
               type:
                 "json_object"
             },
 
-            temperature: 0,
+
+            temperature:
+              0,
+
 
             max_completion_tokens:
               220
@@ -506,16 +723,28 @@ oppure:
         );
 
 
+      const status =
+        String(
+          vision.status ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
+
+
       /*
-       * NON VINO CERTO
+       * ACQUA / BIRRA / OLIO ECC.
        */
+
       if (
-        vision.status ===
+        status ===
         "non_wine"
       ) {
 
         return nonWineResponse(
-          "Il prodotto inquadrato non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini."
+          vision.product_name ||
+          vision.category ||
+          ""
         );
       }
 
@@ -523,8 +752,9 @@ oppure:
       /*
        * FOTO INCERTA
        */
+
       if (
-        vision.status !==
+        status !==
         "wine"
       ) {
 
@@ -534,7 +764,7 @@ oppure:
       }
 
 
-      photoIdentification =
+      photoIdentity =
         [
           vision.name,
           vision.producer,
@@ -546,131 +776,134 @@ oppure:
     }
 
 
-    /* ====================================================
-       EAN / UPC
-    ==================================================== */
+    /* ===================================================
+       EAN
+    =================================================== */
 
-    if (mode === "ean") {
+    if (
+      mode === "ean"
+    ) {
 
       ean =
         String(
           body.ean || ""
         )
-          .replace(/\D/g, "");
+          .replace(
+            /\D/g,
+            ""
+          );
 
 
       if (
-        !/^[0-9]{8}$|^[0-9]{12}$|^[0-9]{13}$|^[0-9]{14}$/
-          .test(ean)
+        !(
+          /^[0-9]{8}$/.test(ean) ||
+          /^[0-9]{12}$/.test(ean) ||
+          /^[0-9]{13}$/.test(ean) ||
+          /^[0-9]{14}$/.test(ean)
+        )
       ) {
 
-        return res.status(400).json({
-          error:
-            "Codice EAN/UPC non valido."
-        });
+        return res
+          .status(400)
+          .json({
+
+            error:
+              "Codice EAN/UPC non valido."
+          });
       }
     }
 
 
-    /* ====================================================
-       PROMPT RICERCA WEB
-    ==================================================== */
+    /* ===================================================
+       RICERCA WEB
+    =================================================== */
 
-    const searchPrompt =
+    const prompt =
       mode === "ean"
 
-        ?
-
-`
+      ? `
 Sei il backend del Sommelier Virtuale.
 
-Cerca sul web questo codice EAN/UPC ESATTO:
+Cerca sul web questo EAN/UPC ESATTO:
 
 "${ean}"
 
-Il servizio è dedicato esclusivamente ai vini.
-
-PRIMA identifica il prodotto e la categoria.
+PRIMA identifica il prodotto.
 
 NON presumere che sia vino.
 
-
-Devi restituire uno dei tre status:
+Restituisci UNO SOLO di questi status:
 
 "wine"
 "non_wine"
 "unknown"
 
 
-Usa status="non_wine" quando il codice
-è associato con ragionevole certezza a:
+NON_WINE:
 
-- acqua
-- birra
-- sidro
-- whisky
-- rum
-- vodka
-- gin
-- grappa
-- amaro
-- liquore
-- vermouth
-- cocktail
-- bibita
-- succo
-- olio
-- aceto
-- alimento
-- qualsiasi altro prodotto non-vino.
+usa status="non_wine" se il codice
+appartiene con ragionevole certezza a:
+
+acqua, birra, sidro, distillato,
+liquore, olio, aceto, bibita,
+succo, alimento o altro prodotto
+che non sia vino.
 
 
-Usa status="unknown" quando:
+UNKNOWN:
 
-- non trovi il codice;
-- trovi risultati contrastanti;
-- non riesci a identificare con certezza
-  categoria e prodotto.
+usa status="unknown" quando:
+
+- non trovi il codice
+- trovi risultati contrastanti
+- non riesci a verificare prodotto e categoria
 
 
-Usa status="wine" SOLTANTO quando
-il prodotto trovato è realmente un vino.
+WINE:
+
+usa status="wine" soltanto
+quando il prodotto è chiaramente un vino.
 
 
 Se NON VINO:
 
 {
   "status": "non_wine",
-  "category": "categoria prodotto",
-  "product_name": "nome prodotto"
+  "product_name": "nome",
+  "category": "categoria"
 }
 
 
-Se NON IDENTIFICATO:
+Se sconosciuto:
 
 {
   "status": "unknown"
 }
 
 
-Se VINO:
+Se vino:
 
-cerca soltanto:
+{
+  "status": "wine",
+  "name": "Nome completo",
+  "producer": "Produttore",
+  "region": "Regione",
+  "type": "Tipologia",
+  "grape": "Vitigno",
+  "taste": "Profilo sintetico massimo 2 frasi",
+  "pairings": "Abbinamento 1, Abbinamento 2, Abbinamento 3",
+  "temperature": "Temperatura",
+  "ideal_for": "Occasioni",
+  "value_story": "Massimo 2 frasi professionali sugli elementi verificati che contribuiscono al posizionamento",
+  "confidence_note": ""
+}
 
-- nome completo
-- produttore/cantina
-- regione
-- tipologia
-- vitigno/uvaggio
-- profilo gustativo
-- 3-5 abbinamenti
-- temperatura di servizio
-- occasioni ideali
-- elementi verificabili
-  che contribuiscono al posizionamento
 
+REGOLE:
 
-Per il valore NON usare mai:
+Non inventare.
+
+Non dire mai:
 
 - costa tanto
 - costa poco
@@ -679,125 +912,78 @@ Per il valore NON usare mai:
 - costoso
 - sovrapprezzato
 
+Nel value_story cita soltanto
+elementi realmente verificati.
 
-Non inventare caratteristiche premium.
-
-
-Se vino rispondi:
-
-{
-  "status": "wine",
-  "ean": "${ean}",
-  "name": "Nome completo",
-  "producer": "Produttore",
-  "region": "Regione",
-  "type": "Tipologia",
-  "grape": "Vitigno",
-  "taste": "Descrizione sintetica, massimo 2 frasi",
-  "pairings": "Abbinamento 1, Abbinamento 2, Abbinamento 3",
-  "temperature": "Temperatura",
-  "ideal_for": "Occasioni",
-  "value_story": "Massimo 2 frasi professionali",
-  "confidence_note": ""
-}
-
-Rispondi SOLO con JSON valido.
+Rispondi SOLO JSON.
 `
 
-        :
-
-`
+      : `
 Sei il backend del Sommelier Virtuale.
 
-Una prima analisi visiva
-ha verificato che la bottiglia sembra un vino.
+La fotografia è stata classificata come vino.
 
-Dati letti dalla fotografia:
+Informazioni lette:
 
-"${photoIdentification}"
+"${photoIdentity}"
 
+Cerca sul web il prodotto
+e verifica l'identità.
 
-Cerca sul web e verifica
-l'identità esatta del prodotto.
-
-
-Usa uno di questi status:
+Restituisci:
 
 "wine"
 "non_wine"
-"unknown"
+oppure
+"unknown".
 
 
-Se scopri che NON è realmente vino:
+Se scopri che NON è vino:
 
 {
   "status": "non_wine",
-  "category": "categoria prodotto",
-  "product_name": "nome prodotto"
+  "product_name": "nome",
+  "category": "categoria"
 }
 
 
-Se non riesci a identificare
-il prodotto con sufficiente certezza:
+Se non sei sufficientemente sicuro:
 
 {
   "status": "unknown"
 }
 
 
-Se confermi che è vino,
-raccogli:
+Se è vino:
 
-- nome
-- produttore
-- regione
-- tipologia
-- vitigno
-- profilo gustativo
-- 3-5 abbinamenti
-- temperatura
-- occasioni ideali
-- elementi verificati
-  che contribuiscono al posizionamento
+{
+  "status": "wine",
+  "name": "Nome completo",
+  "producer": "Produttore",
+  "region": "Regione",
+  "type": "Tipologia",
+  "grape": "Vitigno",
+  "taste": "Profilo sintetico massimo 2 frasi",
+  "pairings": "Abbinamento 1, Abbinamento 2, Abbinamento 3",
+  "temperature": "Temperatura",
+  "ideal_for": "Occasioni",
+  "value_story": "Massimo 2 frasi professionali sul posizionamento",
+  "confidence_note": ""
+}
 
 
 Non inventare.
 
-Non usare espressioni come:
+Non usare giudizi denigratori
+o riferimenti diretti a vino economico/costoso.
 
-- costa tanto
-- costa poco
-- economico
-- scarso
-- costoso
-- sovrapprezzato
-
-
-Rispondi SOLO JSON:
-
-{
-  "status": "wine",
-  "ean": "",
-  "name": "Nome completo",
-  "producer": "Produttore",
-  "region": "Regione",
-  "type": "Tipologia",
-  "grape": "Vitigno",
-  "taste": "Massimo 2 frasi",
-  "pairings": "Abbinamento 1, Abbinamento 2, Abbinamento 3",
-  "temperature": "Temperatura",
-  "ideal_for": "Occasioni",
-  "value_story": "Massimo 2 frasi professionali",
-  "confidence_note": ""
-}
+Rispondi SOLO JSON.
 `;
 
 
-    /* ====================================================
-       COMPOUND MINI + WEB SEARCH
-
-       Una sola ricerca.
-    ==================================================== */
+    /*
+     * Una sola ricerca web.
+     */
 
     const raw =
       await groqRequest(
@@ -807,91 +993,55 @@ Rispondi SOLO JSON:
             "groq/compound-mini",
 
           messages: [
+
             {
-              role: "user",
+              role:
+                "user",
+
               content:
-                searchPrompt
+                prompt
             }
           ],
 
-
-          /*
-           * Compound Mini supporta JSON Object Mode.
-           */
           response_format: {
+
             type:
               "json_object"
           },
 
-
-          /*
-           * Limitiamo i tool
-           * alla sola ricerca web.
-           */
           compound_custom: {
 
             tools: {
 
               enabled_tools: [
+
                 "web_search"
               ]
             }
           },
 
-
-          /*
-           * Output compatto.
-           */
           max_completion_tokens:
-            600
-
+            550
         },
 
         1
       );
 
 
-    /* ====================================================
-       LETTURA RISPOSTA
-
-       Parser robusto.
-    ==================================================== */
-
-    let wine =
-      extractJson(raw);
+    const wine =
+      extractJson(
+        raw
+      );
 
 
     /*
-     * FALLBACK:
-     * se Compound non restituisce JSON,
-     * proviamo almeno a capire se
-     * ha dichiarato esplicitamente NON VINO.
+     * RISPOSTA NON LEGGIBILE
      */
+
     if (!wine) {
 
-      const lower =
-        String(raw || "")
-          .toLowerCase();
-
-
-      if (
-        lower.includes(
-          "non vino"
-        ) ||
-        lower.includes(
-          "non_wine"
-        ) ||
-        lower.includes(
-          '"status": "non_wine"'
-        )
-      ) {
-
-        return nonWineResponse();
-      }
-
-
       console.error(
-        "Risposta Compound non JSON:",
+        "Risposta Compound:",
         raw
       );
 
@@ -902,238 +1052,203 @@ Rispondi SOLO JSON:
     }
 
 
-    /* ====================================================
-       NORMALIZZAZIONE STATUS
-    ==================================================== */
-
-    let status =
+    const status =
       String(
-        wine.status || ""
+        wine.status ||
+        ""
       )
         .trim()
         .toLowerCase();
 
 
     /*
-     * Compatibilità con eventuali
-     * vecchie risposte del modello.
+     * NON VINO
      */
-    if (!status) {
-
-      if (
-        wine.non_wine === true ||
-        (
-          wine.is_wine === false &&
-          wine.identified === true
-        )
-      ) {
-
-        status =
-          "non_wine";
-
-      } else if (
-        wine.is_wine === true ||
-        wine.identified === true
-      ) {
-
-        status =
-          "wine";
-
-      } else {
-
-        status =
-          "unknown";
-      }
-    }
-
-
-    /* ====================================================
-       NON VINO
-    ==================================================== */
 
     if (
       status ===
       "non_wine"
     ) {
 
-      const product =
-        wine.product_name
-          ? ` (${wine.product_name})`
-          : "";
-
-
       return nonWineResponse(
-        `Il prodotto identificato${product} non è un vino. Il Sommelier Virtuale è dedicato esclusivamente ai vini.`
+        wine.product_name ||
+        wine.category ||
+        ""
       );
     }
 
 
-    /* ====================================================
-       NON IDENTIFICATO
-    ==================================================== */
+    /*
+     * SCONOSCIUTO
+     */
 
     if (
-      status !== "wine"
+      status !==
+      "wine"
     ) {
 
       return unknownResponse(
         mode === "ean"
-
           ?
           "Non riesco a identificare con sufficiente certezza il prodotto associato a questo codice. Prova nuovamente oppure fotografa l'etichetta."
-
           :
           "Non riesco a identificare questo vino con sufficiente certezza. Prova con una foto più chiara."
       );
     }
 
 
-    /* ====================================================
-       VINO CONFERMATO
+    /*
+     * VINO CONFERMATO
+     */
 
-       Convertiamo nel formato
-       atteso dal tuo app.js.
-    ==================================================== */
+    return res
+      .status(200)
+      .json({
 
-    wine = {
+        wine: {
 
-      identified: true,
+          identified:
+            true,
 
-      is_wine: true,
+          is_wine:
+            true,
 
-      non_wine: false,
+          non_wine:
+            false,
 
-      ean:
-        mode === "ean"
-          ? ean
-          : "",
+          ean:
+            mode === "ean"
+              ? ean
+              : "",
 
-      name:
-        String(
-          wine.name || ""
-        ),
+          name:
+            String(
+              wine.name ||
+              ""
+            ),
 
-      producer:
-        String(
-          wine.producer || ""
-        ),
+          producer:
+            String(
+              wine.producer ||
+              ""
+            ),
 
-      region:
-        String(
-          wine.region || ""
-        ),
+          region:
+            String(
+              wine.region ||
+              ""
+            ),
 
-      type:
-        String(
-          wine.type || ""
-        ),
+          type:
+            String(
+              wine.type ||
+              ""
+            ),
 
-      grape:
-        String(
-          wine.grape || ""
-        ),
+          grape:
+            String(
+              wine.grape ||
+              ""
+            ),
 
-      taste:
-        String(
-          wine.taste || ""
-        ),
+          taste:
+            String(
+              wine.taste ||
+              ""
+            ),
 
-      pairings:
-        String(
-          wine.pairings || ""
-        ),
+          pairings:
+            String(
+              wine.pairings ||
+              ""
+            ),
 
-      temperature:
-        String(
-          wine.temperature || ""
-        ),
+          temperature:
+            String(
+              wine.temperature ||
+              ""
+            ),
 
-      ideal_for:
-        String(
-          wine.ideal_for || ""
-        ),
+          ideal_for:
+            String(
+              wine.ideal_for ||
+              ""
+            ),
 
-      value_story:
-        String(
-          wine.value_story || ""
-        ),
+          value_story:
+            String(
+              wine.value_story ||
+              ""
+            ),
 
-      confidence_note:
-        String(
-          wine.confidence_note || ""
-        )
-    };
-
-
-    return res.status(200).json({
-      wine
-    });
+          confidence_note:
+            String(
+              wine.confidence_note ||
+              ""
+            )
+        }
+      });
 
 
   } catch (error) {
 
     console.error(
-      "Errore Sommelier:",
+      "Sommelier error:",
       error
     );
 
 
     const message =
       String(
-        error?.message || ""
+        error?.message ||
+        ""
       );
 
 
-    /* ====================================================
-       RATE LIMIT
-    ==================================================== */
+    /*
+     * RATE LIMIT
+     */
 
     if (
       /RATE_LIMIT|rate limit|429|tokens per minute|TPM/i
         .test(message)
     ) {
 
-      return res.status(429).json({
+      return res
+        .status(429)
+        .json({
 
-        error:
-          "Il Sommelier Virtuale è momentaneamente molto richiesto. Attendi qualche secondo e riprova."
-      });
+          error:
+            "Il Sommelier Virtuale è momentaneamente molto richiesto. Attendi qualche secondo e riprova."
+        });
     }
 
 
-    /* ====================================================
-       JSON NON INTERPRETABILE
-
-       Non mostriamo un errore tecnico al cliente.
-    ==================================================== */
+    /*
+     * JSON
+     */
 
     if (
-      message === "JSON_ERROR"
+      message ===
+      "JSON_ERROR"
     ) {
 
-      return res.status(200).json({
-
-        wine: {
-
-          identified: false,
-
-          non_wine: false,
-
-          message:
-            "Non riesco a identificare il prodotto con sufficiente certezza. Prova nuovamente."
-        }
-      });
+      return unknownResponse(
+        "Non riesco a identificare il prodotto con sufficiente certezza. Prova nuovamente."
+      );
     }
 
 
-    /* ====================================================
-       ERRORE GENERICO
-    ==================================================== */
+    /*
+     * ERRORE GENERICO
+     */
 
-    return res.status(500).json({
+    return res
+      .status(500)
+      .json({
 
-      error:
-        "Si è verificato un problema durante la ricerca. Riprova tra qualche secondo."
-    });
+        error:
+          "Si è verificato un problema durante la ricerca. Riprova tra qualche secondo."
+      });
   }
 }
